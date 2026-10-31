@@ -16,124 +16,241 @@ export async function GET(request: Request) {
       return NextResponse.json({ error: 'userPhone query param is required' }, { status: 400 });
     }
 
-    let rows: any[] = [];
-    let allSettled: any[] = [];
+    const isToday = dateRange === 'today';
+    const hasMfs = mfs && mfs !== 'all';
+    const hasStatus = status && status !== 'all';
 
-    // Run transactions query and summary query concurrently via Promise.all
+    let res;
     if (partnerPhone) {
-      const summaryPromise = sql`
-        SELECT sender_phone, receiver_phone, amount, direction, created_at
-        FROM transactions
-        WHERE ((sender_phone = ${userPhone} AND receiver_phone = ${partnerPhone})
-           OR (sender_phone = ${partnerPhone} AND receiver_phone = ${userPhone}))
-          AND status = 'received';
-      `;
-
-      let txPromise;
-      if (dateRange === 'today') {
-        if (mfs && mfs !== 'all') {
-          txPromise = sql`
-            SELECT * FROM transactions
-            WHERE ((sender_phone = ${userPhone} AND receiver_phone = ${partnerPhone})
-               OR (sender_phone = ${partnerPhone} AND receiver_phone = ${userPhone}))
-              AND mfs_type = ${mfs}
-              AND created_at >= (CURRENT_TIMESTAMP AT TIME ZONE 'Asia/Dhaka')::date AT TIME ZONE 'Asia/Dhaka'
-            ORDER BY created_at DESC
-            LIMIT 300;
+      if (isToday) {
+        if (hasMfs && hasStatus) {
+          res = await sql`
+            WITH summary_data AS (
+              SELECT 
+                COALESCE(SUM(CASE WHEN ((direction = 'give' AND sender_phone = ${userPhone}) OR (direction = 'take' AND sender_phone = ${partnerPhone})) THEN amount ELSE 0 END), 0)::numeric AS total_given,
+                COALESCE(SUM(CASE WHEN ((direction = 'take' AND sender_phone = ${userPhone}) OR (direction = 'give' AND sender_phone = ${partnerPhone})) THEN amount ELSE 0 END), 0)::numeric AS total_taken,
+                COALESCE(SUM(CASE WHEN created_at >= (CURRENT_TIMESTAMP AT TIME ZONE 'Asia/Dhaka')::date AT TIME ZONE 'Asia/Dhaka' AND ((direction = 'give' AND sender_phone = ${userPhone}) OR (direction = 'take' AND sender_phone = ${partnerPhone})) THEN amount ELSE 0 END), 0)::numeric AS today_given,
+                COALESCE(SUM(CASE WHEN created_at >= (CURRENT_TIMESTAMP AT TIME ZONE 'Asia/Dhaka')::date AT TIME ZONE 'Asia/Dhaka' AND ((direction = 'take' AND sender_phone = ${userPhone}) OR (direction = 'give' AND sender_phone = ${partnerPhone})) THEN amount ELSE 0 END), 0)::numeric AS today_taken
+              FROM transactions
+              WHERE ((sender_phone = ${userPhone} AND receiver_phone = ${partnerPhone})
+                 OR (sender_phone = ${partnerPhone} AND receiver_phone = ${userPhone}))
+                AND status = 'received'
+            ),
+            tx_list AS (
+              SELECT * FROM transactions
+              WHERE ((sender_phone = ${userPhone} AND receiver_phone = ${partnerPhone})
+                 OR (sender_phone = ${partnerPhone} AND receiver_phone = ${userPhone}))
+                AND mfs_type = ${mfs}
+                AND status = ${status}
+                AND created_at >= (CURRENT_TIMESTAMP AT TIME ZONE 'Asia/Dhaka')::date AT TIME ZONE 'Asia/Dhaka'
+              ORDER BY created_at DESC
+              LIMIT 150
+            )
+            SELECT 
+              (SELECT row_to_json(summary_data) FROM summary_data) AS summary,
+              (SELECT coalesce(json_agg(tx_list), '[]'::json) FROM tx_list) AS transactions;
+          `;
+        } else if (hasMfs) {
+          res = await sql`
+            WITH summary_data AS (
+              SELECT 
+                COALESCE(SUM(CASE WHEN ((direction = 'give' AND sender_phone = ${userPhone}) OR (direction = 'take' AND sender_phone = ${partnerPhone})) THEN amount ELSE 0 END), 0)::numeric AS total_given,
+                COALESCE(SUM(CASE WHEN ((direction = 'take' AND sender_phone = ${userPhone}) OR (direction = 'give' AND sender_phone = ${partnerPhone})) THEN amount ELSE 0 END), 0)::numeric AS total_taken,
+                COALESCE(SUM(CASE WHEN created_at >= (CURRENT_TIMESTAMP AT TIME ZONE 'Asia/Dhaka')::date AT TIME ZONE 'Asia/Dhaka' AND ((direction = 'give' AND sender_phone = ${userPhone}) OR (direction = 'take' AND sender_phone = ${partnerPhone})) THEN amount ELSE 0 END), 0)::numeric AS today_given,
+                COALESCE(SUM(CASE WHEN created_at >= (CURRENT_TIMESTAMP AT TIME ZONE 'Asia/Dhaka')::date AT TIME ZONE 'Asia/Dhaka' AND ((direction = 'take' AND sender_phone = ${userPhone}) OR (direction = 'give' AND sender_phone = ${partnerPhone})) THEN amount ELSE 0 END), 0)::numeric AS today_taken
+              FROM transactions
+              WHERE ((sender_phone = ${userPhone} AND receiver_phone = ${partnerPhone})
+                 OR (sender_phone = ${partnerPhone} AND receiver_phone = ${userPhone}))
+                AND status = 'received'
+            ),
+            tx_list AS (
+              SELECT * FROM transactions
+              WHERE ((sender_phone = ${userPhone} AND receiver_phone = ${partnerPhone})
+                 OR (sender_phone = ${partnerPhone} AND receiver_phone = ${userPhone}))
+                AND mfs_type = ${mfs}
+                AND created_at >= (CURRENT_TIMESTAMP AT TIME ZONE 'Asia/Dhaka')::date AT TIME ZONE 'Asia/Dhaka'
+              ORDER BY created_at DESC
+              LIMIT 150
+            )
+            SELECT 
+              (SELECT row_to_json(summary_data) FROM summary_data) AS summary,
+              (SELECT coalesce(json_agg(tx_list), '[]'::json) FROM tx_list) AS transactions;
+          `;
+        } else if (hasStatus) {
+          res = await sql`
+            WITH summary_data AS (
+              SELECT 
+                COALESCE(SUM(CASE WHEN ((direction = 'give' AND sender_phone = ${userPhone}) OR (direction = 'take' AND sender_phone = ${partnerPhone})) THEN amount ELSE 0 END), 0)::numeric AS total_given,
+                COALESCE(SUM(CASE WHEN ((direction = 'take' AND sender_phone = ${userPhone}) OR (direction = 'give' AND sender_phone = ${partnerPhone})) THEN amount ELSE 0 END), 0)::numeric AS total_taken,
+                COALESCE(SUM(CASE WHEN created_at >= (CURRENT_TIMESTAMP AT TIME ZONE 'Asia/Dhaka')::date AT TIME ZONE 'Asia/Dhaka' AND ((direction = 'give' AND sender_phone = ${userPhone}) OR (direction = 'take' AND sender_phone = ${partnerPhone})) THEN amount ELSE 0 END), 0)::numeric AS today_given,
+                COALESCE(SUM(CASE WHEN created_at >= (CURRENT_TIMESTAMP AT TIME ZONE 'Asia/Dhaka')::date AT TIME ZONE 'Asia/Dhaka' AND ((direction = 'take' AND sender_phone = ${userPhone}) OR (direction = 'give' AND sender_phone = ${partnerPhone})) THEN amount ELSE 0 END), 0)::numeric AS today_taken
+              FROM transactions
+              WHERE ((sender_phone = ${userPhone} AND receiver_phone = ${partnerPhone})
+                 OR (sender_phone = ${partnerPhone} AND receiver_phone = ${userPhone}))
+                AND status = 'received'
+            ),
+            tx_list AS (
+              SELECT * FROM transactions
+              WHERE ((sender_phone = ${userPhone} AND receiver_phone = ${partnerPhone})
+                 OR (sender_phone = ${partnerPhone} AND receiver_phone = ${userPhone}))
+                AND status = ${status}
+                AND created_at >= (CURRENT_TIMESTAMP AT TIME ZONE 'Asia/Dhaka')::date AT TIME ZONE 'Asia/Dhaka'
+              ORDER BY created_at DESC
+              LIMIT 150
+            )
+            SELECT 
+              (SELECT row_to_json(summary_data) FROM summary_data) AS summary,
+              (SELECT coalesce(json_agg(tx_list), '[]'::json) FROM tx_list) AS transactions;
           `;
         } else {
-          txPromise = sql`
-            SELECT * FROM transactions
-            WHERE ((sender_phone = ${userPhone} AND receiver_phone = ${partnerPhone})
-               OR (sender_phone = ${partnerPhone} AND receiver_phone = ${userPhone}))
-              AND created_at >= (CURRENT_TIMESTAMP AT TIME ZONE 'Asia/Dhaka')::date AT TIME ZONE 'Asia/Dhaka'
-            ORDER BY created_at DESC
-            LIMIT 300;
+          res = await sql`
+            WITH summary_data AS (
+              SELECT 
+                COALESCE(SUM(CASE WHEN ((direction = 'give' AND sender_phone = ${userPhone}) OR (direction = 'take' AND sender_phone = ${partnerPhone})) THEN amount ELSE 0 END), 0)::numeric AS total_given,
+                COALESCE(SUM(CASE WHEN ((direction = 'take' AND sender_phone = ${userPhone}) OR (direction = 'give' AND sender_phone = ${partnerPhone})) THEN amount ELSE 0 END), 0)::numeric AS total_taken,
+                COALESCE(SUM(CASE WHEN created_at >= (CURRENT_TIMESTAMP AT TIME ZONE 'Asia/Dhaka')::date AT TIME ZONE 'Asia/Dhaka' AND ((direction = 'give' AND sender_phone = ${userPhone}) OR (direction = 'take' AND sender_phone = ${partnerPhone})) THEN amount ELSE 0 END), 0)::numeric AS today_given,
+                COALESCE(SUM(CASE WHEN created_at >= (CURRENT_TIMESTAMP AT TIME ZONE 'Asia/Dhaka')::date AT TIME ZONE 'Asia/Dhaka' AND ((direction = 'take' AND sender_phone = ${userPhone}) OR (direction = 'give' AND sender_phone = ${partnerPhone})) THEN amount ELSE 0 END), 0)::numeric AS today_taken
+              FROM transactions
+              WHERE ((sender_phone = ${userPhone} AND receiver_phone = ${partnerPhone})
+                 OR (sender_phone = ${partnerPhone} AND receiver_phone = ${userPhone}))
+                AND status = 'received'
+            ),
+            tx_list AS (
+              SELECT * FROM transactions
+              WHERE ((sender_phone = ${userPhone} AND receiver_phone = ${partnerPhone})
+                 OR (sender_phone = ${partnerPhone} AND receiver_phone = ${userPhone}))
+                AND created_at >= (CURRENT_TIMESTAMP AT TIME ZONE 'Asia/Dhaka')::date AT TIME ZONE 'Asia/Dhaka'
+              ORDER BY created_at DESC
+              LIMIT 150
+            )
+            SELECT 
+              (SELECT row_to_json(summary_data) FROM summary_data) AS summary,
+              (SELECT coalesce(json_agg(tx_list), '[]'::json) FROM tx_list) AS transactions;
           `;
         }
       } else {
-        if (mfs && mfs !== 'all') {
-          txPromise = sql`
-            SELECT * FROM transactions
-            WHERE ((sender_phone = ${userPhone} AND receiver_phone = ${partnerPhone})
-               OR (sender_phone = ${partnerPhone} AND receiver_phone = ${userPhone}))
-              AND mfs_type = ${mfs}
-            ORDER BY created_at DESC
-            LIMIT 300;
+        // All time
+        if (hasMfs && hasStatus) {
+          res = await sql`
+            WITH summary_data AS (
+              SELECT 
+                COALESCE(SUM(CASE WHEN ((direction = 'give' AND sender_phone = ${userPhone}) OR (direction = 'take' AND sender_phone = ${partnerPhone})) THEN amount ELSE 0 END), 0)::numeric AS total_given,
+                COALESCE(SUM(CASE WHEN ((direction = 'take' AND sender_phone = ${userPhone}) OR (direction = 'give' AND sender_phone = ${partnerPhone})) THEN amount ELSE 0 END), 0)::numeric AS total_taken,
+                COALESCE(SUM(CASE WHEN created_at >= (CURRENT_TIMESTAMP AT TIME ZONE 'Asia/Dhaka')::date AT TIME ZONE 'Asia/Dhaka' AND ((direction = 'give' AND sender_phone = ${userPhone}) OR (direction = 'take' AND sender_phone = ${partnerPhone})) THEN amount ELSE 0 END), 0)::numeric AS today_given,
+                COALESCE(SUM(CASE WHEN created_at >= (CURRENT_TIMESTAMP AT TIME ZONE 'Asia/Dhaka')::date AT TIME ZONE 'Asia/Dhaka' AND ((direction = 'take' AND sender_phone = ${userPhone}) OR (direction = 'give' AND sender_phone = ${partnerPhone})) THEN amount ELSE 0 END), 0)::numeric AS today_taken
+              FROM transactions
+              WHERE ((sender_phone = ${userPhone} AND receiver_phone = ${partnerPhone})
+                 OR (sender_phone = ${partnerPhone} AND receiver_phone = ${userPhone}))
+                AND status = 'received'
+            ),
+            tx_list AS (
+              SELECT * FROM transactions
+              WHERE ((sender_phone = ${userPhone} AND receiver_phone = ${partnerPhone})
+                 OR (sender_phone = ${partnerPhone} AND receiver_phone = ${userPhone}))
+                AND mfs_type = ${mfs}
+                AND status = ${status}
+              ORDER BY created_at DESC
+              LIMIT 150
+            )
+            SELECT 
+              (SELECT row_to_json(summary_data) FROM summary_data) AS summary,
+              (SELECT coalesce(json_agg(tx_list), '[]'::json) FROM tx_list) AS transactions;
+          `;
+        } else if (hasMfs) {
+          res = await sql`
+            WITH summary_data AS (
+              SELECT 
+                COALESCE(SUM(CASE WHEN ((direction = 'give' AND sender_phone = ${userPhone}) OR (direction = 'take' AND sender_phone = ${partnerPhone})) THEN amount ELSE 0 END), 0)::numeric AS total_given,
+                COALESCE(SUM(CASE WHEN ((direction = 'take' AND sender_phone = ${userPhone}) OR (direction = 'give' AND sender_phone = ${partnerPhone})) THEN amount ELSE 0 END), 0)::numeric AS total_taken,
+                COALESCE(SUM(CASE WHEN created_at >= (CURRENT_TIMESTAMP AT TIME ZONE 'Asia/Dhaka')::date AT TIME ZONE 'Asia/Dhaka' AND ((direction = 'give' AND sender_phone = ${userPhone}) OR (direction = 'take' AND sender_phone = ${partnerPhone})) THEN amount ELSE 0 END), 0)::numeric AS today_given,
+                COALESCE(SUM(CASE WHEN created_at >= (CURRENT_TIMESTAMP AT TIME ZONE 'Asia/Dhaka')::date AT TIME ZONE 'Asia/Dhaka' AND ((direction = 'take' AND sender_phone = ${userPhone}) OR (direction = 'give' AND sender_phone = ${partnerPhone})) THEN amount ELSE 0 END), 0)::numeric AS today_taken
+              FROM transactions
+              WHERE ((sender_phone = ${userPhone} AND receiver_phone = ${partnerPhone})
+                 OR (sender_phone = ${partnerPhone} AND receiver_phone = ${userPhone}))
+                AND status = 'received'
+            ),
+            tx_list AS (
+              SELECT * FROM transactions
+              WHERE ((sender_phone = ${userPhone} AND receiver_phone = ${partnerPhone})
+                 OR (sender_phone = ${partnerPhone} AND receiver_phone = ${userPhone}))
+                AND mfs_type = ${mfs}
+              ORDER BY created_at DESC
+              LIMIT 150
+            )
+            SELECT 
+              (SELECT row_to_json(summary_data) FROM summary_data) AS summary,
+              (SELECT coalesce(json_agg(tx_list), '[]'::json) FROM tx_list) AS transactions;
+          `;
+        } else if (hasStatus) {
+          res = await sql`
+            WITH summary_data AS (
+              SELECT 
+                COALESCE(SUM(CASE WHEN ((direction = 'give' AND sender_phone = ${userPhone}) OR (direction = 'take' AND sender_phone = ${partnerPhone})) THEN amount ELSE 0 END), 0)::numeric AS total_given,
+                COALESCE(SUM(CASE WHEN ((direction = 'take' AND sender_phone = ${userPhone}) OR (direction = 'give' AND sender_phone = ${partnerPhone})) THEN amount ELSE 0 END), 0)::numeric AS total_taken,
+                COALESCE(SUM(CASE WHEN created_at >= (CURRENT_TIMESTAMP AT TIME ZONE 'Asia/Dhaka')::date AT TIME ZONE 'Asia/Dhaka' AND ((direction = 'give' AND sender_phone = ${userPhone}) OR (direction = 'take' AND sender_phone = ${partnerPhone})) THEN amount ELSE 0 END), 0)::numeric AS today_given,
+                COALESCE(SUM(CASE WHEN created_at >= (CURRENT_TIMESTAMP AT TIME ZONE 'Asia/Dhaka')::date AT TIME ZONE 'Asia/Dhaka' AND ((direction = 'take' AND sender_phone = ${userPhone}) OR (direction = 'give' AND sender_phone = ${partnerPhone})) THEN amount ELSE 0 END), 0)::numeric AS today_taken
+              FROM transactions
+              WHERE ((sender_phone = ${userPhone} AND receiver_phone = ${partnerPhone})
+                 OR (sender_phone = ${partnerPhone} AND receiver_phone = ${userPhone}))
+                AND status = 'received'
+            ),
+            tx_list AS (
+              SELECT * FROM transactions
+              WHERE ((sender_phone = ${userPhone} AND receiver_phone = ${partnerPhone})
+                 OR (sender_phone = ${partnerPhone} AND receiver_phone = ${userPhone}))
+                AND status = ${status}
+              ORDER BY created_at DESC
+              LIMIT 150
+            )
+            SELECT 
+              (SELECT row_to_json(summary_data) FROM summary_data) AS summary,
+              (SELECT coalesce(json_agg(tx_list), '[]'::json) FROM tx_list) AS transactions;
           `;
         } else {
-          txPromise = sql`
-            SELECT * FROM transactions
-            WHERE ((sender_phone = ${userPhone} AND receiver_phone = ${partnerPhone})
-               OR (sender_phone = ${partnerPhone} AND receiver_phone = ${userPhone}))
-            ORDER BY created_at DESC
-            LIMIT 300;
+          res = await sql`
+            WITH summary_data AS (
+              SELECT 
+                COALESCE(SUM(CASE WHEN ((direction = 'give' AND sender_phone = ${userPhone}) OR (direction = 'take' AND sender_phone = ${partnerPhone})) THEN amount ELSE 0 END), 0)::numeric AS total_given,
+                COALESCE(SUM(CASE WHEN ((direction = 'take' AND sender_phone = ${userPhone}) OR (direction = 'give' AND sender_phone = ${partnerPhone})) THEN amount ELSE 0 END), 0)::numeric AS total_taken,
+                COALESCE(SUM(CASE WHEN created_at >= (CURRENT_TIMESTAMP AT TIME ZONE 'Asia/Dhaka')::date AT TIME ZONE 'Asia/Dhaka' AND ((direction = 'give' AND sender_phone = ${userPhone}) OR (direction = 'take' AND sender_phone = ${partnerPhone})) THEN amount ELSE 0 END), 0)::numeric AS today_given,
+                COALESCE(SUM(CASE WHEN created_at >= (CURRENT_TIMESTAMP AT TIME ZONE 'Asia/Dhaka')::date AT TIME ZONE 'Asia/Dhaka' AND ((direction = 'take' AND sender_phone = ${userPhone}) OR (direction = 'give' AND sender_phone = ${partnerPhone})) THEN amount ELSE 0 END), 0)::numeric AS today_taken
+              FROM transactions
+              WHERE ((sender_phone = ${userPhone} AND receiver_phone = ${partnerPhone})
+                 OR (sender_phone = ${partnerPhone} AND receiver_phone = ${userPhone}))
+                AND status = 'received'
+            ),
+            tx_list AS (
+              SELECT * FROM transactions
+              WHERE ((sender_phone = ${userPhone} AND receiver_phone = ${partnerPhone})
+                 OR (sender_phone = ${partnerPhone} AND receiver_phone = ${userPhone}))
+              ORDER BY created_at DESC
+              LIMIT 150
+            )
+            SELECT 
+              (SELECT row_to_json(summary_data) FROM summary_data) AS summary,
+              (SELECT coalesce(json_agg(tx_list), '[]'::json) FROM tx_list) AS transactions;
           `;
         }
       }
-
-      const [txResult, sumResult] = await Promise.all([txPromise, summaryPromise]);
-      rows = txResult;
-      allSettled = sumResult;
     } else {
-      const summaryPromise = sql`
-        SELECT sender_phone, receiver_phone, amount, direction, created_at
-        FROM transactions
+      res = await sql`
+        SELECT * FROM transactions
         WHERE (sender_phone = ${userPhone} OR receiver_phone = ${userPhone})
-          AND status = 'received';
+        ORDER BY created_at DESC
+        LIMIT 100;
       `;
-
-      let txPromise;
-      if (dateRange === 'today') {
-        txPromise = sql`
-          SELECT * FROM transactions
-          WHERE (sender_phone = ${userPhone} OR receiver_phone = ${userPhone})
-            AND created_at >= (CURRENT_TIMESTAMP AT TIME ZONE 'Asia/Dhaka')::date AT TIME ZONE 'Asia/Dhaka'
-          ORDER BY created_at DESC
-          LIMIT 300;
-        `;
-      } else {
-        txPromise = sql`
-          SELECT * FROM transactions
-          WHERE (sender_phone = ${userPhone} OR receiver_phone = ${userPhone})
-          ORDER BY created_at DESC
-          LIMIT 300;
-        `;
-      }
-
-      const [txResult, sumResult] = await Promise.all([txPromise, summaryPromise]);
-      rows = txResult;
-      allSettled = sumResult;
+      return NextResponse.json({ transactions: res, summary: null });
     }
 
-    // Filter by status in memory if specified and not 'all'
-    if (status && status !== 'all') {
-      rows = rows.filter((r: any) => r.status === status);
-    }
+    const rawSummary = res[0]?.summary || { total_given: 0, total_taken: 0, today_given: 0, today_taken: 0 };
+    const rawTx = res[0]?.transactions || [];
 
-    // Fast Asia/Dhaka day boundary summary calculation
-    const todayStr = new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Dhaka' }).format(new Date());
-    let todayGiven = 0;
-    let todayTaken = 0;
-    let totalGiven = 0;
-    let totalTaken = 0;
-
-    for (const tx of allSettled) {
-      const amt = Number(tx.amount) || 0;
-      const txDateStr = tx.created_at ? new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Dhaka' }).format(new Date(tx.created_at)) : '';
-      const isToday = txDateStr === todayStr;
-      const isSender = tx.sender_phone === userPhone;
-      const isPayer = (tx.direction === 'give' && isSender) || (tx.direction === 'take' && !isSender);
-      if (isPayer) {
-        totalGiven += amt;
-        if (isToday) todayGiven += amt;
-      } else {
-        totalTaken += amt;
-        if (isToday) todayTaken += amt;
-      }
-    }
-
+    const totalGiven = Number(rawSummary.total_given) || 0;
+    const totalTaken = Number(rawSummary.total_taken) || 0;
+    const todayGiven = Number(rawSummary.today_given) || 0;
+    const todayTaken = Number(rawSummary.today_taken) || 0;
     const netBalance = totalGiven - totalTaken;
+
     const summary = {
       todayGiven,
       todayTaken,
@@ -147,7 +264,7 @@ export async function GET(request: Request) {
         : `All settled up (৳ 0)`
     };
 
-    return NextResponse.json({ transactions: rows, summary });
+    return NextResponse.json({ transactions: rawTx, summary });
   } catch (error: any) {
     console.error('Error fetching transactions:', error);
     return NextResponse.json({ error: error.message || 'Internal Server Error' }, { status: 500 });

@@ -192,7 +192,7 @@ export default function Home() {
   }, []);
 
   // Fetch data
-  const fetchData = useCallback(async () => {
+  const fetchData = useCallback(async (isManualRefresh = false) => {
     if (!userPhone) return;
     setIsLoading(true);
     try {
@@ -213,13 +213,28 @@ export default function Home() {
         if (txData.summary) {
           setSummary(txData.summary);
         }
+        if (isManualRefresh) {
+          showToast('Ledger refreshed!', 'info');
+        }
+      } else {
+        if (isManualRefresh) {
+          showToast('Failed to refresh data', 'error');
+        }
       }
     } catch (err) {
       console.error('Fetch error:', err);
+      if (isManualRefresh) {
+        showToast('Network error, please check connection', 'error');
+      }
     } finally {
       setIsLoading(false);
     }
   }, [userPhone, partnerPhone, dateRange, selectedMfs, selectedStatus]);
+
+  const handleRefresh = async () => {
+    if (isLoading) return;
+    await fetchData(true);
+  };
 
   useEffect(() => {
     fetchData();
@@ -885,7 +900,7 @@ export default function Home() {
               )}
 
               <button
-                onClick={fetchData}
+                onClick={handleRefresh}
                 disabled={isLoading}
                 className="h-8 w-8 flex items-center justify-center text-xs font-semibold bg-white hover:bg-slate-50 dark:bg-slate-800/80 dark:hover:bg-slate-700/80 text-slate-700 dark:text-slate-300 rounded-sm transition border border-slate-200 dark:border-slate-700/60 shadow-xs cursor-pointer active:scale-[0.98]"
                 title="Refresh"
@@ -938,13 +953,13 @@ export default function Home() {
             )}
 
             <button
-              onClick={fetchData}
+              onClick={handleRefresh}
               disabled={isLoading}
               className="h-9 px-3 text-xs font-semibold bg-white hover:bg-slate-50 dark:bg-slate-800/80 dark:hover:bg-slate-700/80 text-slate-700 dark:text-slate-300 rounded-sm transition flex items-center gap-1.5 border border-slate-200 dark:border-slate-700/60 shadow-xs cursor-pointer active:scale-[0.98]"
               title="Refresh transactions"
             >
               <RotateCw className={`w-3.5 h-3.5 ${isLoading ? 'animate-spin text-[#C5A880]' : ''}`} />
-              <span className="hidden sm:inline">Refresh</span>
+              <span className="hidden sm:inline">{isLoading ? 'Refreshing...' : 'Refresh'}</span>
             </button>
 
             <button
