@@ -42,7 +42,7 @@ async function run() {
       sender_phone VARCHAR(20) NOT NULL,
       receiver_phone VARCHAR(20) NOT NULL,
       mfs_type mfs_provider NOT NULL,
-      customer_phone VARCHAR(20) NOT NULL,
+      customer_phone VARCHAR(20),
       amount NUMERIC(12, 2) NOT NULL,
       direction transaction_direction NOT NULL,
       trx_id VARCHAR(100),

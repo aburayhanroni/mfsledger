@@ -291,7 +291,7 @@ export async function POST(request: Request) {
       notes
     } = body;
 
-    if (!sender_phone || !receiver_phone || !mfs_type || !customer_phone || amount === undefined || !direction) {
+    if (!sender_phone || !receiver_phone || !mfs_type || amount === undefined || !direction) {
       return NextResponse.json({ error: 'Missing required transaction fields' }, { status: 400 });
     }
 
@@ -311,10 +311,15 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'Amount must be a valid number between ৳ 1 and ৳ 1,000,000' }, { status: 400 });
     }
 
-    // Customer phone sanitization
-    const cleanCustomerPhone = String(customer_phone).trim().replace(/[^\d+]/g, '');
-    if (cleanCustomerPhone.length < 6 || cleanCustomerPhone.length > 20) {
-      return NextResponse.json({ error: 'Invalid customer phone number length' }, { status: 400 });
+    // Customer phone sanitization (Optional)
+    let cleanCustomerPhone: string | null = null;
+    if (customer_phone && String(customer_phone).trim()) {
+      const sanitized = String(customer_phone).trim().replace(/[^\d+]/g, '');
+      if (sanitized.length >= 3 && sanitized.length <= 20) {
+        cleanCustomerPhone = sanitized;
+      } else if (sanitized.length > 0) {
+        return NextResponse.json({ error: 'Invalid customer phone number' }, { status: 400 });
+      }
     }
 
     // TrxID sanitization
