@@ -92,6 +92,7 @@ export default function Home() {
   const [summary, setSummary] = useState<SummaryData | null>(null);
   const [isLoading, setIsLoading] = useState<boolean>(false);
   const [copiedId, setCopiedId] = useState<string | null>(null);
+  const [expandedTxId, setExpandedTxId] = useState<number | string | null>(null);
 
   // Filters
   const [dateRange, setDateRange] = useState<'today' | 'all'>('today');
@@ -1317,7 +1318,7 @@ export default function Home() {
                 </table>
               </div>
 
-              {/* Mobile Card Feed View (Visible on mobile only) */}
+              {/* Mobile Card Feed View (Compact Single-line Row with Tap-to-Expand Details) */}
               <div className="sm:hidden divide-y divide-slate-100 dark:divide-slate-800/70">
                 {transactions.map((tx) => {
                   const isSender = tx.sender_phone === userPhone;
@@ -1325,195 +1326,290 @@ export default function Home() {
                   const mfsMeta = MFS_CONFIG[tx.mfs_type] || MFS_CONFIG.bkash;
                   const formattedDate = new Date(tx.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
                   const formattedFullDate = new Date(tx.created_at).toLocaleDateString([], { month: 'short', day: 'numeric' });
+                  const isExpanded = expandedTxId === tx.id;
+
+                  // Partner needs to act (e.g. confirm received or pay)
+                  const needsMyAction = !isSender && (
+                    tx.status === 'sent' || 
+                    (tx.status === 'pending' && tx.direction === 'take')
+                  );
 
                   return (
-                    <div key={tx.id} className="p-3 space-y-2.5 bg-white dark:bg-[#12131A] hover:bg-slate-50/60 dark:hover:bg-slate-900/30 transition">
-                      {/* Top Row: MFS info & Time on left, Amount & Flow on right */}
-                      <div className="flex items-start justify-between gap-2">
+                    <div 
+                      key={tx.id} 
+                      onClick={() => setExpandedTxId(isExpanded ? null : tx.id)}
+                      className={`transition-colors cursor-pointer select-none ${
+                        isExpanded 
+                          ? 'bg-slate-50/95 dark:bg-[#161722]/95 border-l-2 border-[#C5A880]' 
+                          : needsMyAction
+                          ? 'bg-amber-50/25 dark:bg-amber-950/15 hover:bg-amber-50/50 dark:hover:bg-amber-950/25'
+                          : 'bg-white dark:bg-[#12131A] hover:bg-slate-50/60 dark:hover:bg-slate-900/40'
+                      }`}
+                    >
+                      {/* Compact Single Line Row */}
+                      <div className="px-3 py-2.5 flex items-center justify-between gap-2">
+                        {/* Left: Official MFS Logo + Customer Phone + Time */}
                         <div className="flex items-center gap-2 min-w-0">
-                          <div className="w-9 h-7 flex items-center justify-center p-0.5 bg-white border border-slate-200 dark:border-slate-700/60 rounded-xs shadow-xs shrink-0">
+                          <div className="w-8 h-6 flex items-center justify-center p-0.5 bg-white border border-slate-200 dark:border-slate-700/60 rounded-xs shadow-xs shrink-0">
                             <MfsLogo type={tx.mfs_type} className="w-full h-full object-contain" />
                           </div>
                           <div className="min-w-0">
-                            <div className="font-bold text-xs text-slate-900 dark:text-slate-100 uppercase tracking-wide truncate">
-                              {mfsMeta.name}
+                            <div className="flex items-center gap-1.5">
+                              <span className="font-mono font-bold text-xs text-slate-900 dark:text-slate-100 truncate">
+                                {tx.customer_phone}
+                              </span>
+                              {needsMyAction && (
+                                <span className="w-1.5 h-1.5 rounded-full bg-amber-500 animate-pulse shrink-0" title="Action required" />
+                              )}
                             </div>
-                            <div className="text-[10px] text-slate-400 dark:text-slate-500 font-normal">
-                              {formattedDate} • {formattedFullDate}
+                            <div className="text-[10px] text-slate-400 dark:text-slate-500 font-medium leading-none mt-0.5 truncate">
+                              {formattedDate} • <span className="uppercase">{mfsMeta.name}</span>
                             </div>
                           </div>
                         </div>
 
-                        <div className="text-right shrink-0">
-                          <div className={`font-mono font-bold text-sm ${isPayer ? 'text-[#8C6B3F] dark:text-[#C5A880]' : 'text-amber-700 dark:text-amber-300'}`}>
-                            ৳ {Number(tx.amount).toLocaleString()}
+                        {/* Right: Amount + Direction/Status Badge + Chevron */}
+                        <div className="flex items-center gap-2 shrink-0">
+                          <div className="text-right">
+                            <div className={`font-mono font-bold text-xs sm:text-sm leading-tight ${
+                              isPayer ? 'text-[#8C6B3F] dark:text-[#C5A880]' : 'text-amber-700 dark:text-amber-400'
+                            }`}>
+                              {isPayer ? '-' : '+'} ৳ {Number(tx.amount).toLocaleString()}
+                            </div>
+                            <div className="text-[10px] font-semibold leading-none mt-0.5 flex items-center justify-end">
+                              {tx.status === 'received' ? (
+                                <span className="text-[#8C6B3F] dark:text-[#C5A880] inline-flex items-center gap-0.5">
+                                  {isPayer ? 'Paid' : 'Received'}
+                                </span>
+                              ) : tx.status === 'sent' ? (
+                                isSender ? (
+                                  <span className="text-blue-600 dark:text-blue-400 font-medium">Waiting</span>
+                                ) : (
+                                  <span className="text-amber-700 dark:text-amber-300 font-bold bg-amber-100 dark:bg-amber-950/70 px-1 py-0.5 rounded-xs">
+                                    Confirm?
+                                  </span>
+                                )
+                              ) : tx.status === 'rejected' ? (
+                                <span className="text-rose-500 dark:text-rose-400">Rejected</span>
+                              ) : (
+                                isSender ? (
+                                  <span className="text-slate-400 font-medium">Waiting</span>
+                                ) : (
+                                  <span className="text-amber-700 dark:text-amber-300 font-bold bg-amber-100 dark:bg-amber-950/70 px-1 py-0.5 rounded-xs">
+                                    Pay Needed
+                                  </span>
+                                )
+                              )}
+                            </div>
                           </div>
-                          <div className="mt-0.5">
-                            {isPayer ? (
-                              <span className="inline-flex items-center gap-0.5 font-semibold text-[#8C6B3F] dark:text-[#C5A880] text-[10px]">
-                                <ArrowUpRight className="w-3 h-3" />
-                                <span>Paid</span>
-                              </span>
-                            ) : (
-                              <span className="inline-flex items-center gap-0.5 font-semibold text-amber-700 dark:text-amber-400 text-[10px]">
-                                <ArrowDownLeft className="w-3 h-3" />
-                                <span>Received</span>
-                              </span>
-                            )}
-                          </div>
+
+                          <ChevronDown className={`w-3.5 h-3.5 text-slate-400 transition-transform duration-200 shrink-0 ${
+                            isExpanded ? 'rotate-180 text-[#C5A880]' : ''
+                          }`} />
                         </div>
                       </div>
 
-                      {/* Middle Row: Customer Number & TrxID with Easy Tap Copy */}
-                      <div className="bg-slate-50 dark:bg-[#161722] border border-slate-200 dark:border-slate-800 rounded-sm p-2 flex items-center justify-between text-xs gap-2">
-                        {/* Customer Phone */}
-                        <div className="flex items-center gap-1.5 min-w-0">
-                          <span className="text-[10px] font-medium text-slate-400 uppercase shrink-0">Cust:</span>
-                          <span className="font-mono font-bold text-slate-900 dark:text-slate-200 text-xs truncate">{tx.customer_phone}</span>
-                          <button
-                            onClick={() => copyToClipboard(tx.customer_phone, 'phone-mob-' + tx.id)}
-                            className="p-1 rounded-sm text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 active:bg-slate-200 dark:active:bg-slate-800 transition cursor-pointer shrink-0"
-                            title="Copy customer phone"
-                          >
-                            {copiedId === 'phone-mob-' + tx.id ? (
-                              <Check className="w-3.5 h-3.5 text-[#9E7B4F] dark:text-[#C5A880]" />
-                            ) : (
-                              <Copy className="w-3.5 h-3.5" />
-                            )}
-                          </button>
-                        </div>
-
-                        {/* TrxID & Proof */}
-                        <div className="flex items-center gap-1 shrink-0">
-                          {tx.trx_id ? (
+                      {/* Expandable Details Drawer */}
+                      {isExpanded && (
+                        <div 
+                          onClick={(e) => e.stopPropagation()}
+                          className="px-3 pb-3 pt-1 space-y-2.5 border-t border-slate-100 dark:border-slate-800/80 animate-in fade-in-50 duration-150"
+                        >
+                          {/* Row 1: Customer Phone with 1-tap Copy */}
+                          <div className="bg-white dark:bg-[#12131A] border border-slate-200 dark:border-slate-800 rounded-sm p-2 flex items-center justify-between gap-2 shadow-xs">
+                            <div className="min-w-0">
+                              <span className="text-[10px] font-semibold text-slate-400 uppercase tracking-wider block">Customer Number</span>
+                              <span className="font-mono font-bold text-xs sm:text-sm text-slate-900 dark:text-slate-100 truncate block">
+                                {tx.customer_phone}
+                              </span>
+                            </div>
                             <button
-                              onClick={() => copyToClipboard(tx.trx_id!, 'trx-mob-' + tx.id)}
-                              className="inline-flex items-center gap-1 bg-white dark:bg-slate-800/90 px-1.5 py-0.5 rounded-sm text-[11px] font-mono font-medium text-slate-700 dark:text-slate-300 border border-slate-200 dark:border-slate-700/60 active:scale-95 transition cursor-pointer"
-                              title="Click to copy TrxID"
+                              type="button"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                copyToClipboard(tx.customer_phone, 'phone-mob-' + tx.id);
+                              }}
+                              className="h-7 px-2.5 text-xs font-semibold bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 border border-slate-200 dark:border-slate-700/60 rounded-sm flex items-center gap-1 active:scale-95 transition cursor-pointer shrink-0"
                             >
-                              <span className="truncate max-w-[75px]">{tx.trx_id}</span>
-                              {copiedId === 'trx-mob-' + tx.id ? (
-                                <Check className="w-3 h-3 text-[#9E7B4F] dark:text-[#C5A880]" />
+                              {copiedId === 'phone-mob-' + tx.id ? (
+                                <>
+                                  <Check className="w-3.5 h-3.5 text-[#9E7B4F] dark:text-[#C5A880]" />
+                                  <span>Copied</span>
+                                </>
                               ) : (
-                                <Copy className="w-3 h-3 text-slate-400" />
+                                <>
+                                  <Copy className="w-3.5 h-3.5 text-slate-400" />
+                                  <span>Copy</span>
+                                </>
                               )}
                             </button>
-                          ) : (
-                            <span className="text-[10px] text-slate-400 dark:text-slate-500 italic">—</span>
+                          </div>
+
+                          {/* Row 2: TrxID, Proof & Date */}
+                          <div className="flex items-center justify-between gap-2 text-xs">
+                            <div className="flex items-center gap-1.5 min-w-0">
+                              <span className="text-[10px] font-semibold text-slate-400 uppercase shrink-0">TrxID:</span>
+                              {tx.trx_id ? (
+                                <button
+                                  type="button"
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    copyToClipboard(tx.trx_id!, 'trx-mob-' + tx.id);
+                                  }}
+                                  className="inline-flex items-center gap-1 bg-white dark:bg-slate-800/90 px-2 py-0.5 rounded-sm font-mono text-[11px] font-semibold text-slate-800 dark:text-slate-200 border border-slate-200 dark:border-slate-700/60 active:scale-95 transition cursor-pointer"
+                                  title="Copy TrxID"
+                                >
+                                  <span className="truncate max-w-[120px]">{tx.trx_id}</span>
+                                  {copiedId === 'trx-mob-' + tx.id ? (
+                                    <Check className="w-3 h-3 text-[#9E7B4F] dark:text-[#C5A880]" />
+                                  ) : (
+                                    <Copy className="w-3 h-3 text-slate-400" />
+                                  )}
+                                </button>
+                              ) : (
+                                <span className="text-[11px] text-slate-400 dark:text-slate-500 italic">—</span>
+                              )}
+                            </div>
+
+                            <div className="flex items-center gap-1.5 shrink-0">
+                              {tx.screenshot_url && (
+                                <button
+                                  type="button"
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    setPreviewImage(tx.screenshot_url);
+                                  }}
+                                  className="h-6 px-2 text-[11px] font-medium rounded-sm bg-[#C5A880]/15 dark:bg-[#C5A880]/10 text-[#8C6B3F] dark:text-[#C5A880] border border-[#C5A880]/30 hover:bg-[#C5A880]/20 active:scale-95 transition flex items-center gap-1 cursor-pointer"
+                                >
+                                  <Eye className="w-3 h-3" />
+                                  <span>Proof</span>
+                                </button>
+                              )}
+                              <span className="text-[10px] text-slate-400 dark:text-slate-500 font-medium">
+                                {formattedFullDate}
+                              </span>
+                            </div>
+                          </div>
+
+                          {/* Notes if present */}
+                          {tx.notes && (
+                            <div className="text-[11px] text-slate-600 dark:text-slate-300 bg-slate-100/70 dark:bg-slate-800/50 rounded-xs p-1.5 border border-slate-200/60 dark:border-slate-700/40">
+                              <span className="font-semibold text-slate-400 text-[10px] uppercase mr-1">Note:</span>
+                              {tx.notes}
+                            </div>
                           )}
 
-                          {tx.screenshot_url && (
-                            <button
-                              onClick={() => setPreviewImage(tx.screenshot_url)}
-                              className="p-1 rounded-sm bg-[#C5A880]/15 dark:bg-[#C5A880]/10 text-[#8C6B3F] dark:text-[#C5A880] border border-[#C5A880]/30 active:scale-95 transition cursor-pointer"
-                              title="View screenshot proof"
-                            >
-                              <Eye className="w-3.5 h-3.5" />
-                            </button>
-                          )}
-                        </div>
-                      </div>
+                          {/* Action Buttons Section */}
+                          <div className="pt-1.5 flex items-center justify-between border-t border-slate-100 dark:border-slate-800/60 gap-2">
+                            {/* Status Tag */}
+                            <div>
+                              {tx.status === 'received' ? (
+                                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-sm text-[10px] font-semibold uppercase tracking-wider bg-[#C5A880]/15 text-[#8C6B3F] dark:text-[#C5A880] border border-[#C5A880]/30">
+                                  <Check className="w-3 h-3 text-[#8C6B3F] dark:text-[#C5A880]" />
+                                  <span>{isPayer ? 'SENT' : 'RECEIVED'}</span>
+                                </span>
+                              ) : tx.status === 'sent' ? (
+                                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-sm text-[10px] font-semibold uppercase tracking-wider bg-blue-50 dark:bg-blue-950/40 text-blue-600 dark:text-blue-400 border border-blue-200 dark:border-blue-800/40">
+                                  <span>{isPayer ? 'WAITING' : 'PENDING CONFIRM'}</span>
+                                </span>
+                              ) : tx.status === 'rejected' ? (
+                                <span className="inline-flex items-center px-2 py-0.5 rounded-sm text-[10px] font-semibold uppercase tracking-wider bg-rose-50 dark:bg-rose-950/40 text-rose-600 dark:text-rose-400 border border-rose-200 dark:border-rose-800/40">
+                                  REJECTED
+                                </span>
+                              ) : (
+                                <span className="inline-flex items-center px-2 py-0.5 rounded-sm text-[10px] font-semibold uppercase tracking-wider bg-amber-50 dark:bg-amber-950/40 text-amber-700 dark:text-amber-400 border border-amber-200 dark:border-amber-800/40">
+                                  {isPayer ? 'PAYMENT REQUESTED' : 'WAITING PAYMENT'}
+                                </span>
+                              )}
+                            </div>
 
-                      {/* Notes if any */}
-                      {tx.notes && (
-                        <div className="text-[10px] text-slate-500 dark:text-slate-400 italic px-1 truncate">
-                          Note: {tx.notes}
+                            {/* Buttons */}
+                            <div className="flex items-center gap-2">
+                              {tx.status === 'received' ? (
+                                <span className="text-[11px] font-semibold text-[#8C6B3F] dark:text-[#C5A880] flex items-center gap-1">
+                                  <Check className="w-3.5 h-3.5" />
+                                  <span>{isPayer ? 'Paid' : 'Received'}</span>
+                                </span>
+                              ) : tx.status === 'rejected' ? (
+                                <div className="flex items-center gap-1.5">
+                                  <span className="text-[10px] font-semibold text-rose-600 dark:text-rose-400">Rejected</span>
+                                  {isSender && (
+                                    <button
+                                      type="button"
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        handleUpdateStatus(tx.id, 'pending');
+                                      }}
+                                      className="h-7 px-2.5 text-xs font-semibold rounded-sm bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 border border-slate-300 dark:border-slate-700/60 active:scale-95 transition cursor-pointer"
+                                    >
+                                      Re-open
+                                    </button>
+                                  )}
+                                </div>
+                              ) : (
+                                isSender ? (
+                                  <div className="flex items-center gap-2">
+                                    <span className="text-[10px] text-slate-400 dark:text-slate-500 italic">
+                                      {tx.direction === 'take' ? 'Waiting partner to pay' : 'Waiting partner to confirm'}
+                                    </span>
+                                    <button
+                                      type="button"
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        handleUpdateStatus(tx.id, 'rejected');
+                                      }}
+                                      className="h-7 px-2.5 text-xs font-semibold rounded-sm text-slate-500 hover:text-rose-600 dark:hover:text-rose-400 bg-rose-50/50 hover:bg-rose-100 dark:bg-rose-950/30 border border-rose-200/60 dark:border-rose-800/40 active:scale-95 transition cursor-pointer"
+                                    >
+                                      Cancel
+                                    </button>
+                                  </div>
+                                ) : (
+                                  <div className="flex items-center gap-2">
+                                    {tx.direction === 'take' ? (
+                                      <button
+                                        type="button"
+                                        onClick={(e) => {
+                                          e.stopPropagation();
+                                          setFulfillTx(tx);
+                                          setFulfillTrxId('');
+                                          setFulfillScreenshot('');
+                                          setFulfillNotes('');
+                                          stopCamera();
+                                        }}
+                                        className="h-8 px-3 text-xs font-bold rounded-sm bg-[#C5A880] hover:bg-[#B3966F] active:scale-95 text-slate-950 shadow-sm transition flex items-center gap-1.5 cursor-pointer"
+                                      >
+                                        <Send className="w-3.5 h-3.5" />
+                                        <span>Pay & Send TrxID</span>
+                                      </button>
+                                    ) : (
+                                      <button
+                                        type="button"
+                                        onClick={(e) => {
+                                          e.stopPropagation();
+                                          handleUpdateStatus(tx.id, 'received');
+                                        }}
+                                        className="h-8 px-3 text-xs font-bold rounded-sm bg-[#C5A880] hover:bg-[#B3966F] active:scale-95 text-slate-950 shadow-sm transition cursor-pointer"
+                                      >
+                                        Confirm Received
+                                      </button>
+                                    )}
+                                    <button
+                                      type="button"
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        handleUpdateStatus(tx.id, 'rejected');
+                                      }}
+                                      className="h-8 px-2.5 text-xs font-semibold rounded-sm bg-rose-50 dark:bg-rose-950/40 text-rose-600 dark:text-rose-300 hover:bg-rose-100 dark:hover:bg-rose-900/60 border border-rose-200 dark:border-rose-800/40 transition cursor-pointer active:scale-95"
+                                    >
+                                      Reject
+                                    </button>
+                                  </div>
+                                )
+                              )}
+                            </div>
+                          </div>
                         </div>
                       )}
-
-                      {/* Bottom Row: Status Badge & Contextual Actions */}
-                      <div className="flex items-center justify-between pt-1 border-t border-slate-100 dark:border-slate-800/60 gap-2">
-                        {/* Status Badge */}
-                        <div>
-                          {tx.status === 'received' ? (
-                            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-sm text-[10px] font-semibold uppercase tracking-wider bg-[#C5A880]/15 text-[#8C6B3F] dark:text-[#C5A880] border border-[#C5A880]/30">
-                              <Check className="w-3 h-3 text-[#8C6B3F] dark:text-[#C5A880]" />
-                              <span>{isPayer ? 'SENT' : 'RECEIVED'}</span>
-                            </span>
-                          ) : tx.status === 'sent' ? (
-                            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-sm text-[10px] font-semibold uppercase tracking-wider bg-blue-50 dark:bg-blue-950/40 text-blue-600 dark:text-blue-400 border border-blue-200 dark:border-blue-800/40">
-                              <span>{isPayer ? 'WAITING' : 'PENDING'}</span>
-                            </span>
-                          ) : tx.status === 'rejected' ? (
-                            <span className="inline-flex items-center px-2 py-0.5 rounded-sm text-[10px] font-semibold uppercase tracking-wider bg-rose-50 dark:bg-rose-950/40 text-rose-600 dark:text-rose-400 border border-rose-200 dark:border-rose-800/40">
-                              REJECTED
-                            </span>
-                          ) : (
-                            <span className="inline-flex items-center px-2 py-0.5 rounded-sm text-[10px] font-semibold uppercase tracking-wider bg-amber-50 dark:bg-amber-950/40 text-amber-700 dark:text-amber-400 border border-amber-200 dark:border-amber-800/40">
-                              {isPayer ? 'PAYMENT REQUESTED' : 'WAITING PAYMENT'}
-                            </span>
-                          )}
-                        </div>
-
-                        {/* Action buttons */}
-                        <div className="flex items-center gap-1.5 shrink-0">
-                          {tx.status === 'received' ? (
-                            <span className="inline-flex items-center gap-1 text-[10px] font-semibold text-[#8C6B3F] dark:text-[#C5A880] bg-[#C5A880]/15 dark:bg-[#C5A880]/10 px-2 py-0.5 rounded-sm border border-[#C5A880]/30">
-                              <Check className="w-3 h-3" />
-                              <span>{isPayer ? 'Paid' : 'Received'}</span>
-                            </span>
-                          ) : tx.status === 'rejected' ? (
-                            <div className="flex items-center gap-1">
-                              <span className="text-[10px] font-semibold text-rose-600 dark:text-rose-400 bg-rose-50 dark:bg-rose-950/40 px-1.5 py-0.5 rounded-sm border border-rose-200 dark:border-rose-800/40">
-                                Rejected
-                              </span>
-                              {isSender && (
-                                <button
-                                  onClick={() => handleUpdateStatus(tx.id, 'pending')}
-                                  className="h-6 px-2 text-[10px] font-medium rounded-sm bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 text-slate-700 dark:text-slate-300 border border-slate-300 dark:border-slate-700/60 transition cursor-pointer"
-                                >
-                                  Re-open
-                                </button>
-                              )}
-                            </div>
-                          ) : (
-                            isSender ? (
-                              <div className="flex items-center gap-1.5">
-                                <span className="text-[10px] text-slate-400 dark:text-slate-500 italic">
-                                  {tx.direction === 'take' ? 'Waiting partner' : 'Waiting confirm'}
-                                </span>
-                                <button
-                                  onClick={() => handleUpdateStatus(tx.id, 'rejected')}
-                                  className="h-6 px-2 text-[10px] font-medium rounded-sm text-slate-400 hover:text-rose-600 dark:hover:text-rose-400 hover:bg-rose-50 dark:hover:bg-rose-950/40 transition cursor-pointer"
-                                >
-                                  Cancel
-                                </button>
-                              </div>
-                            ) : (
-                              <div className="flex items-center gap-1.5">
-                                {tx.direction === 'take' ? (
-                                  <button
-                                    onClick={() => {
-                                      setFulfillTx(tx);
-                                      setFulfillTrxId('');
-                                      setFulfillScreenshot('');
-                                      setFulfillNotes('');
-                                      stopCamera();
-                                    }}
-                                    className="h-7 px-2.5 text-xs font-semibold rounded-sm bg-[#C5A880] hover:bg-[#B3966F] active:scale-95 text-slate-950 shadow-sm transition flex items-center gap-1 cursor-pointer"
-                                  >
-                                    <Send className="w-3 h-3" />
-                                    <span>Pay & TrxID</span>
-                                  </button>
-                                ) : (
-                                  <button
-                                    onClick={() => handleUpdateStatus(tx.id, 'received')}
-                                    className="h-7 px-2.5 text-xs font-semibold rounded-sm bg-[#C5A880] hover:bg-[#B3966F] active:scale-95 text-slate-950 shadow-sm transition cursor-pointer"
-                                  >
-                                    Confirm
-                                  </button>
-                                )}
-                                <button
-                                  onClick={() => handleUpdateStatus(tx.id, 'rejected')}
-                                  className="h-7 px-2 text-xs font-semibold rounded-sm bg-rose-50 dark:bg-rose-950/40 text-rose-600 dark:text-rose-300 hover:bg-rose-100 dark:hover:bg-rose-900/60 border border-rose-200 dark:border-rose-800/40 transition cursor-pointer active:scale-95"
-                                >
-                                  Reject
-                                </button>
-                              </div>
-                            )
-                          )}
-                        </div>
-                      </div>
                     </div>
                   );
                 })}
