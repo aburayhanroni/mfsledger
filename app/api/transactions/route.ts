@@ -17,68 +17,93 @@ export async function GET(request: Request) {
     }
 
     let rows: any[] = [];
+    let allSettled: any[] = [];
 
-    // Build conditions
+    // Run transactions query and summary query concurrently via Promise.all
     if (partnerPhone) {
+      const summaryPromise = sql`
+        SELECT sender_phone, receiver_phone, amount, direction, created_at
+        FROM transactions
+        WHERE ((sender_phone = ${userPhone} AND receiver_phone = ${partnerPhone})
+           OR (sender_phone = ${partnerPhone} AND receiver_phone = ${userPhone}))
+          AND status = 'received';
+      `;
+
+      let txPromise;
       if (dateRange === 'today') {
         if (mfs && mfs !== 'all') {
-          rows = await sql`
+          txPromise = sql`
             SELECT * FROM transactions
             WHERE ((sender_phone = ${userPhone} AND receiver_phone = ${partnerPhone})
                OR (sender_phone = ${partnerPhone} AND receiver_phone = ${userPhone}))
               AND mfs_type = ${mfs}
-              AND created_at >= CURRENT_DATE
+              AND created_at >= (CURRENT_TIMESTAMP AT TIME ZONE 'Asia/Dhaka')::date AT TIME ZONE 'Asia/Dhaka'
             ORDER BY created_at DESC
-            LIMIT 200;
+            LIMIT 300;
           `;
         } else {
-          rows = await sql`
+          txPromise = sql`
             SELECT * FROM transactions
             WHERE ((sender_phone = ${userPhone} AND receiver_phone = ${partnerPhone})
                OR (sender_phone = ${partnerPhone} AND receiver_phone = ${userPhone}))
-              AND created_at >= CURRENT_DATE
+              AND created_at >= (CURRENT_TIMESTAMP AT TIME ZONE 'Asia/Dhaka')::date AT TIME ZONE 'Asia/Dhaka'
             ORDER BY created_at DESC
-            LIMIT 200;
+            LIMIT 300;
           `;
         }
       } else {
         if (mfs && mfs !== 'all') {
-          rows = await sql`
+          txPromise = sql`
             SELECT * FROM transactions
             WHERE ((sender_phone = ${userPhone} AND receiver_phone = ${partnerPhone})
                OR (sender_phone = ${partnerPhone} AND receiver_phone = ${userPhone}))
               AND mfs_type = ${mfs}
             ORDER BY created_at DESC
-            LIMIT 200;
+            LIMIT 300;
           `;
         } else {
-          rows = await sql`
+          txPromise = sql`
             SELECT * FROM transactions
             WHERE ((sender_phone = ${userPhone} AND receiver_phone = ${partnerPhone})
                OR (sender_phone = ${partnerPhone} AND receiver_phone = ${userPhone}))
             ORDER BY created_at DESC
-            LIMIT 200;
+            LIMIT 300;
           `;
         }
       }
+
+      const [txResult, sumResult] = await Promise.all([txPromise, summaryPromise]);
+      rows = txResult;
+      allSettled = sumResult;
     } else {
-      // All transactions involving userPhone
+      const summaryPromise = sql`
+        SELECT sender_phone, receiver_phone, amount, direction, created_at
+        FROM transactions
+        WHERE (sender_phone = ${userPhone} OR receiver_phone = ${userPhone})
+          AND status = 'received';
+      `;
+
+      let txPromise;
       if (dateRange === 'today') {
-        rows = await sql`
+        txPromise = sql`
           SELECT * FROM transactions
           WHERE (sender_phone = ${userPhone} OR receiver_phone = ${userPhone})
-            AND created_at >= CURRENT_DATE
+            AND created_at >= (CURRENT_TIMESTAMP AT TIME ZONE 'Asia/Dhaka')::date AT TIME ZONE 'Asia/Dhaka'
           ORDER BY created_at DESC
-          LIMIT 200;
+          LIMIT 300;
         `;
       } else {
-        rows = await sql`
+        txPromise = sql`
           SELECT * FROM transactions
           WHERE (sender_phone = ${userPhone} OR receiver_phone = ${userPhone})
           ORDER BY created_at DESC
-          LIMIT 200;
+          LIMIT 300;
         `;
       }
+
+      const [txResult, sumResult] = await Promise.all([txPromise, summaryPromise]);
+      rows = txResult;
+      allSettled = sumResult;
     }
 
     // Filter by status in memory if specified and not 'all'
@@ -86,7 +111,43 @@ export async function GET(request: Request) {
       rows = rows.filter((r: any) => r.status === status);
     }
 
-    return NextResponse.json({ transactions: rows });
+    // Fast Asia/Dhaka day boundary summary calculation
+    const todayStr = new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Dhaka' }).format(new Date());
+    let todayGiven = 0;
+    let todayTaken = 0;
+    let totalGiven = 0;
+    let totalTaken = 0;
+
+    for (const tx of allSettled) {
+      const amt = Number(tx.amount) || 0;
+      const txDateStr = tx.created_at ? new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Dhaka' }).format(new Date(tx.created_at)) : '';
+      const isToday = txDateStr === todayStr;
+      const isSender = tx.sender_phone === userPhone;
+      const isPayer = (tx.direction === 'give' && isSender) || (tx.direction === 'take' && !isSender);
+      if (isPayer) {
+        totalGiven += amt;
+        if (isToday) todayGiven += amt;
+      } else {
+        totalTaken += amt;
+        if (isToday) todayTaken += amt;
+      }
+    }
+
+    const netBalance = totalGiven - totalTaken;
+    const summary = {
+      todayGiven,
+      todayTaken,
+      totalGiven,
+      totalTaken,
+      netBalance,
+      statusText: netBalance > 0 
+        ? `Partner owes you ৳ ${netBalance.toLocaleString()}`
+        : netBalance < 0
+        ? `You owe partner ৳ ${Math.abs(netBalance).toLocaleString()}`
+        : `All settled up (৳ 0)`
+    };
+
+    return NextResponse.json({ transactions: rows, summary });
   } catch (error: any) {
     console.error('Error fetching transactions:', error);
     return NextResponse.json({ error: error.message || 'Internal Server Error' }, { status: 500 });

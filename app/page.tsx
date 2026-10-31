@@ -50,6 +50,7 @@ interface Transaction {
   status: TransactionStatus;
   notes: string | null;
   created_at: string;
+  updated_at?: string;
 }
 
 interface SummaryData {
@@ -203,19 +204,15 @@ export default function Home() {
         status: selectedStatus,
       });
 
-      const [txRes, sumRes] = await Promise.all([
-        fetch(`/api/transactions?${txParams.toString()}`),
-        fetch(`/api/summary?userPhone=${userPhone}${partnerPhone ? `&partnerPhone=${partnerPhone}` : ''}`),
-      ]);
+      // Single combined fast query returns both transactions and summary
+      const txRes = await fetch(`/api/transactions?${txParams.toString()}`);
 
       if (txRes.ok) {
         const txData = await txRes.json();
         setTransactions(txData.transactions || []);
-      }
-
-      if (sumRes.ok) {
-        const sumData = await sumRes.json();
-        setSummary(sumData.summary || null);
+        if (txData.summary) {
+          setSummary(txData.summary);
+        }
       }
     } catch (err) {
       console.error('Fetch error:', err);
@@ -411,7 +408,7 @@ export default function Home() {
     e.target.value = '';
   };
 
-  // Create Transaction
+  // Create Transaction with Instant Optimistic UI
   const handleCreateSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!formData.amount || !formData.customer_phone) {
@@ -424,22 +421,65 @@ export default function Home() {
       return;
     }
 
+    const isGive = formData.direction === 'give';
+    const numAmount = parseFloat(formData.amount);
+    const cleanCustomerPhone = formData.customer_phone.trim();
+    const cleanTrxId = isGive ? (formData.trx_id ? formData.trx_id.trim() : null) : null;
+    const cleanNotes = formData.notes ? formData.notes.trim() : null;
+    const cleanScreenshot = isGive ? (formData.screenshot_url || null) : null;
+
+    const payload = {
+      sender_phone: userPhone,
+      receiver_phone: partnerPhone,
+      mfs_type: formData.mfs_type,
+      customer_phone: cleanCustomerPhone,
+      amount: numAmount,
+      direction: formData.direction,
+      trx_id: cleanTrxId,
+      screenshot_url: cleanScreenshot,
+      status: isGive ? 'sent' : 'pending',
+      notes: cleanNotes,
+    };
+
+    // Instant UI reaction: close modal, stop camera, and show toast in 0ms!
+    setIsCreateModalOpen(false);
+    stopCamera();
+    showToast('Transaction saved successfully!', 'success');
+
+    // Instant optimistic addition to local feed
+    const tempId = Date.now();
+    const optimisticTx: Transaction = {
+      id: tempId,
+      sender_phone: userPhone,
+      receiver_phone: partnerPhone,
+      mfs_type: formData.mfs_type,
+      customer_phone: cleanCustomerPhone,
+      amount: numAmount,
+      direction: formData.direction,
+      trx_id: cleanTrxId,
+      screenshot_url: cleanScreenshot,
+      status: (isGive ? 'sent' : 'pending') as TransactionStatus,
+      notes: cleanNotes,
+      created_at: new Date().toISOString(),
+      updated_at: new Date().toISOString(),
+    };
+
+    setTransactions((prev) => [optimisticTx, ...prev]);
+
+    // Reset form immediately
+    setFormData({
+      mfs_type: 'bkash',
+      customer_phone: '',
+      amount: '',
+      direction: 'give',
+      trx_id: '',
+      notes: '',
+      screenshot_url: '',
+      status: 'sent',
+    });
+
     setFormSubmitting(true);
     try {
-      const isGive = formData.direction === 'give';
-      const payload = {
-        sender_phone: userPhone,
-        receiver_phone: partnerPhone,
-        mfs_type: formData.mfs_type,
-        customer_phone: formData.customer_phone.trim(),
-        amount: parseFloat(formData.amount),
-        direction: formData.direction,
-        trx_id: isGive ? (formData.trx_id ? formData.trx_id.trim() : null) : null,
-        screenshot_url: isGive ? (formData.screenshot_url || null) : null,
-        status: isGive ? 'sent' : 'pending',
-        notes: formData.notes ? formData.notes.trim() : null,
-      };
-
       const res = await fetch('/api/transactions', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -449,32 +489,23 @@ export default function Home() {
       const data = await res.json().catch(() => ({}));
 
       if (res.ok) {
-        setIsCreateModalOpen(false);
-        stopCamera();
-        setFormData({
-          mfs_type: 'bkash',
-          customer_phone: '',
-          amount: '',
-          direction: 'give',
-          trx_id: '',
-          notes: '',
-          screenshot_url: '',
-          status: 'sent',
-        });
-        showToast('Transaction saved successfully!', 'success');
+        // Re-sync with actual server record
         fetchData();
       } else {
+        // Rollback optimistic item if failed
+        setTransactions((prev) => prev.filter((t) => t.id !== tempId));
         showToast(data.error || 'Failed to create transaction', 'error');
       }
     } catch (err: any) {
       console.error('Submit error:', err);
+      setTransactions((prev) => prev.filter((t) => t.id !== tempId));
       showToast('Error submitting transaction: ' + (err.message || 'Please check connection'), 'error');
     } finally {
       setFormSubmitting(false);
     }
   };
 
-  // Fulfill Request Submission (Shop B sends money & submits TrxID)
+  // Fulfill Request Submission with Instant Optimistic UI (Shop B sends money & submits TrxID)
   const handleFulfillSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!fulfillTx) return;
@@ -483,53 +514,152 @@ export default function Home() {
       return;
     }
 
+    const currentFulfill = fulfillTx;
+    const submittedTrxId = fulfillTrxId.trim().toUpperCase();
+    const submittedNotes = fulfillNotes.trim();
+    const submittedScreenshot = fulfillScreenshot;
+
+    // Instant UI feedback: close modal and show toast in 0ms!
+    setFulfillTx(null);
+    stopCamera();
+    showToast('Payment submitted and verified successfully!', 'success');
+
+    // Instant local state update in 0ms!
+    const prevTransactions = [...transactions];
+    const prevSummary = summary ? { ...summary } : null;
+
+    setTransactions((prev) =>
+      prev.map((t) =>
+        t.id === currentFulfill.id
+          ? {
+              ...t,
+              status: 'received' as TransactionStatus,
+              trx_id: submittedTrxId,
+              screenshot_url: submittedScreenshot || t.screenshot_url,
+              notes: submittedNotes ? (t.notes ? `${t.notes} | ${submittedNotes}` : submittedNotes) : t.notes,
+            }
+          : t
+      )
+    );
+
+    // Optimistically update summary in 0ms
+    if (summary) {
+      const amt = Number(currentFulfill.amount) || 0;
+      const isSender = currentFulfill.sender_phone === userPhone;
+      const isPayer = (currentFulfill.direction === 'give' && isSender) || (currentFulfill.direction === 'take' && !isSender);
+      setSummary((prev) => {
+        if (!prev) return null;
+        const newGiven = isPayer ? prev.totalGiven + amt : prev.totalGiven;
+        const newTaken = !isPayer ? prev.totalTaken + amt : prev.totalTaken;
+        const newNet = newGiven - newTaken;
+        return {
+          ...prev,
+          todayGiven: isPayer ? prev.todayGiven + amt : prev.todayGiven,
+          todayTaken: !isPayer ? prev.todayTaken + amt : prev.todayTaken,
+          totalGiven: newGiven,
+          totalTaken: newTaken,
+          netBalance: newNet,
+          statusText: newNet > 0 
+            ? `Partner owes you ৳ ${newNet.toLocaleString()}`
+            : newNet < 0 
+            ? `You owe partner ৳ ${Math.abs(newNet).toLocaleString()}`
+            : 'All settled up (৳ 0)',
+        };
+      });
+    }
+
     setFulfillSubmitting(true);
     try {
-      const res = await fetch(`/api/transactions/${fulfillTx.id}`, {
+      const res = await fetch(`/api/transactions/${currentFulfill.id}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           status: 'received',
-          trx_id: fulfillTrxId.trim(),
-          screenshot_url: fulfillScreenshot || null,
-          notes: fulfillNotes.trim() 
-            ? (fulfillTx.notes ? `${fulfillTx.notes} | ${fulfillNotes.trim()}` : fulfillNotes.trim()) 
-            : fulfillTx.notes,
+          trx_id: submittedTrxId,
+          screenshot_url: submittedScreenshot || null,
+          notes: submittedNotes 
+            ? (currentFulfill.notes ? `${currentFulfill.notes} | ${submittedNotes}` : submittedNotes) 
+            : currentFulfill.notes,
         }),
       });
 
-      if (res.ok) {
-        setFulfillTx(null);
-        stopCamera();
-        showToast('Payment submitted and verified successfully!', 'success');
-        fetchData();
-      } else {
+      if (!res.ok) {
+        setTransactions(prevTransactions);
+        setSummary(prevSummary);
         const data = await res.json().catch(() => ({}));
         showToast(data.error || 'Failed to complete transaction', 'error');
+      } else {
+        fetchData();
       }
     } catch (err: any) {
       console.error(err);
+      setTransactions(prevTransactions);
+      setSummary(prevSummary);
       showToast('Error completing transaction: ' + (err.message || 'Network issue'), 'error');
     } finally {
       setFulfillSubmitting(false);
     }
   };
 
-  // Update Status directly
+  // Instant Optimistic Status Update (Confirm Received, Reject, Re-open)
   const handleUpdateStatus = async (id: number, newStatus: TransactionStatus) => {
+    const prevTransactions = [...transactions];
+    const prevSummary = summary ? { ...summary } : null;
+    const targetTx = transactions.find((t) => t.id === id);
+
+    // Instant UI change in 0 milliseconds!
+    setTransactions((prev) =>
+      prev.map((t) => (t.id === id ? { ...t, status: newStatus } : t))
+    );
+
+    // If marked received, immediately update summary balance in 0ms!
+    if (summary && targetTx && newStatus === 'received' && targetTx.status !== 'received') {
+      const amt = Number(targetTx.amount) || 0;
+      const isSender = targetTx.sender_phone === userPhone;
+      const isPayer = (targetTx.direction === 'give' && isSender) || (targetTx.direction === 'take' && !isSender);
+      setSummary((prev) => {
+        if (!prev) return null;
+        const newGiven = isPayer ? prev.totalGiven + amt : prev.totalGiven;
+        const newTaken = !isPayer ? prev.totalTaken + amt : prev.totalTaken;
+        const newNet = newGiven - newTaken;
+        return {
+          ...prev,
+          todayGiven: isPayer ? prev.todayGiven + amt : prev.todayGiven,
+          todayTaken: !isPayer ? prev.todayTaken + amt : prev.todayTaken,
+          totalGiven: newGiven,
+          totalTaken: newTaken,
+          netBalance: newNet,
+          statusText: newNet > 0 
+            ? `Partner owes you ৳ ${newNet.toLocaleString()}`
+            : newNet < 0 
+            ? `You owe partner ৳ ${Math.abs(newNet).toLocaleString()}`
+            : 'All settled up (৳ 0)',
+        };
+      });
+    }
+
+    showToast(`Transaction marked as ${newStatus}`, 'info');
+
     try {
       const res = await fetch(`/api/transactions/${id}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ status: newStatus }),
       });
-      if (res.ok) {
-        showToast(`Transaction marked as ${newStatus}`, 'info');
+      if (!res.ok) {
+        // Rollback if server fails
+        setTransactions(prevTransactions);
+        setSummary(prevSummary);
+        showToast('Server error, reverting status', 'error');
+      } else {
+        // Background silent sync
         fetchData();
       }
     } catch (err) {
       console.error(err);
-      showToast('Failed to update status', 'error');
+      setTransactions(prevTransactions);
+      setSummary(prevSummary);
+      showToast('Network error, please check connection', 'error');
     }
   };
 
