@@ -5,6 +5,15 @@ export const metadata: Metadata = {
   title: 'Dual-Shop MFS Mutual Ledger',
   description: 'Real-time mutual bKash, Nagad, Rocket, Upay financial ledger tracking between partnered shops.',
   applicationName: 'MFS Ledger',
+  icons: {
+    icon: [
+      { url: '/icon.svg', type: 'image/svg+xml' },
+      { url: '/favicon.ico', sizes: '32x32' },
+    ],
+    apple: [
+      { url: '/icon.svg', type: 'image/svg+xml' },
+    ],
+  },
   appleWebApp: {
     capable: true,
     statusBarStyle: 'black-translucent',
