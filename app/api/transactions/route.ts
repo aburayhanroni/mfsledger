@@ -11,6 +11,8 @@ export async function GET(request: Request) {
     const mfs = searchParams.get('mfs');
     const status = searchParams.get('status');
     const dateRange = searchParams.get('dateRange'); // 'today' or 'all'
+    const timezoneParam = searchParams.get('timezone') || 'Asia/Dhaka';
+    const tz = /^[A-Za-z0-9_+\-\/]+$/.test(timezoneParam) ? timezoneParam : 'Asia/Dhaka';
 
     if (!userPhone) {
       return NextResponse.json({ error: 'userPhone query param is required' }, { status: 400 });
@@ -29,8 +31,14 @@ export async function GET(request: Request) {
               SELECT 
                 COALESCE(SUM(CASE WHEN ((direction = 'give' AND sender_phone = ${userPhone}) OR (direction = 'take' AND sender_phone = ${partnerPhone})) THEN amount ELSE 0 END), 0)::numeric AS total_given,
                 COALESCE(SUM(CASE WHEN ((direction = 'take' AND sender_phone = ${userPhone}) OR (direction = 'give' AND sender_phone = ${partnerPhone})) THEN amount ELSE 0 END), 0)::numeric AS total_taken,
-                COALESCE(SUM(CASE WHEN created_at >= (CURRENT_TIMESTAMP AT TIME ZONE 'Asia/Dhaka')::date AT TIME ZONE 'Asia/Dhaka' AND ((direction = 'give' AND sender_phone = ${userPhone}) OR (direction = 'take' AND sender_phone = ${partnerPhone})) THEN amount ELSE 0 END), 0)::numeric AS today_given,
-                COALESCE(SUM(CASE WHEN created_at >= (CURRENT_TIMESTAMP AT TIME ZONE 'Asia/Dhaka')::date AT TIME ZONE 'Asia/Dhaka' AND ((direction = 'take' AND sender_phone = ${userPhone}) OR (direction = 'give' AND sender_phone = ${partnerPhone})) THEN amount ELSE 0 END), 0)::numeric AS today_taken
+                COALESCE(SUM(CASE WHEN created_at >= timezone(${tz}, date_trunc('day', timezone(${tz}, CURRENT_TIMESTAMP)))
+                                    AND created_at < timezone(${tz}, date_trunc('day', timezone(${tz}, CURRENT_TIMESTAMP)) + interval '1 day')
+                                    AND ((direction = 'give' AND sender_phone = ${userPhone}) OR (direction = 'take' AND sender_phone = ${partnerPhone})) 
+                                  THEN amount ELSE 0 END), 0)::numeric AS today_given,
+                COALESCE(SUM(CASE WHEN created_at >= timezone(${tz}, date_trunc('day', timezone(${tz}, CURRENT_TIMESTAMP)))
+                                    AND created_at < timezone(${tz}, date_trunc('day', timezone(${tz}, CURRENT_TIMESTAMP)) + interval '1 day')
+                                    AND ((direction = 'take' AND sender_phone = ${userPhone}) OR (direction = 'give' AND sender_phone = ${partnerPhone})) 
+                                  THEN amount ELSE 0 END), 0)::numeric AS today_taken
               FROM transactions
               WHERE ((sender_phone = ${userPhone} AND receiver_phone = ${partnerPhone})
                  OR (sender_phone = ${partnerPhone} AND receiver_phone = ${userPhone}))
@@ -42,7 +50,8 @@ export async function GET(request: Request) {
                  OR (sender_phone = ${partnerPhone} AND receiver_phone = ${userPhone}))
                 AND mfs_type = ${mfs}
                 AND status = ${status}
-                AND created_at >= (CURRENT_TIMESTAMP AT TIME ZONE 'Asia/Dhaka')::date AT TIME ZONE 'Asia/Dhaka'
+                AND created_at >= timezone(${tz}, date_trunc('day', timezone(${tz}, CURRENT_TIMESTAMP)))
+                AND created_at < timezone(${tz}, date_trunc('day', timezone(${tz}, CURRENT_TIMESTAMP)) + interval '1 day')
               ORDER BY created_at DESC
               LIMIT 150
             )
@@ -56,8 +65,14 @@ export async function GET(request: Request) {
               SELECT 
                 COALESCE(SUM(CASE WHEN ((direction = 'give' AND sender_phone = ${userPhone}) OR (direction = 'take' AND sender_phone = ${partnerPhone})) THEN amount ELSE 0 END), 0)::numeric AS total_given,
                 COALESCE(SUM(CASE WHEN ((direction = 'take' AND sender_phone = ${userPhone}) OR (direction = 'give' AND sender_phone = ${partnerPhone})) THEN amount ELSE 0 END), 0)::numeric AS total_taken,
-                COALESCE(SUM(CASE WHEN created_at >= (CURRENT_TIMESTAMP AT TIME ZONE 'Asia/Dhaka')::date AT TIME ZONE 'Asia/Dhaka' AND ((direction = 'give' AND sender_phone = ${userPhone}) OR (direction = 'take' AND sender_phone = ${partnerPhone})) THEN amount ELSE 0 END), 0)::numeric AS today_given,
-                COALESCE(SUM(CASE WHEN created_at >= (CURRENT_TIMESTAMP AT TIME ZONE 'Asia/Dhaka')::date AT TIME ZONE 'Asia/Dhaka' AND ((direction = 'take' AND sender_phone = ${userPhone}) OR (direction = 'give' AND sender_phone = ${partnerPhone})) THEN amount ELSE 0 END), 0)::numeric AS today_taken
+                COALESCE(SUM(CASE WHEN created_at >= timezone(${tz}, date_trunc('day', timezone(${tz}, CURRENT_TIMESTAMP)))
+                                    AND created_at < timezone(${tz}, date_trunc('day', timezone(${tz}, CURRENT_TIMESTAMP)) + interval '1 day')
+                                    AND ((direction = 'give' AND sender_phone = ${userPhone}) OR (direction = 'take' AND sender_phone = ${partnerPhone})) 
+                                  THEN amount ELSE 0 END), 0)::numeric AS today_given,
+                COALESCE(SUM(CASE WHEN created_at >= timezone(${tz}, date_trunc('day', timezone(${tz}, CURRENT_TIMESTAMP)))
+                                    AND created_at < timezone(${tz}, date_trunc('day', timezone(${tz}, CURRENT_TIMESTAMP)) + interval '1 day')
+                                    AND ((direction = 'take' AND sender_phone = ${userPhone}) OR (direction = 'give' AND sender_phone = ${partnerPhone})) 
+                                  THEN amount ELSE 0 END), 0)::numeric AS today_taken
               FROM transactions
               WHERE ((sender_phone = ${userPhone} AND receiver_phone = ${partnerPhone})
                  OR (sender_phone = ${partnerPhone} AND receiver_phone = ${userPhone}))
@@ -68,7 +83,8 @@ export async function GET(request: Request) {
               WHERE ((sender_phone = ${userPhone} AND receiver_phone = ${partnerPhone})
                  OR (sender_phone = ${partnerPhone} AND receiver_phone = ${userPhone}))
                 AND mfs_type = ${mfs}
-                AND created_at >= (CURRENT_TIMESTAMP AT TIME ZONE 'Asia/Dhaka')::date AT TIME ZONE 'Asia/Dhaka'
+                AND created_at >= timezone(${tz}, date_trunc('day', timezone(${tz}, CURRENT_TIMESTAMP)))
+                AND created_at < timezone(${tz}, date_trunc('day', timezone(${tz}, CURRENT_TIMESTAMP)) + interval '1 day')
               ORDER BY created_at DESC
               LIMIT 150
             )
@@ -82,8 +98,14 @@ export async function GET(request: Request) {
               SELECT 
                 COALESCE(SUM(CASE WHEN ((direction = 'give' AND sender_phone = ${userPhone}) OR (direction = 'take' AND sender_phone = ${partnerPhone})) THEN amount ELSE 0 END), 0)::numeric AS total_given,
                 COALESCE(SUM(CASE WHEN ((direction = 'take' AND sender_phone = ${userPhone}) OR (direction = 'give' AND sender_phone = ${partnerPhone})) THEN amount ELSE 0 END), 0)::numeric AS total_taken,
-                COALESCE(SUM(CASE WHEN created_at >= (CURRENT_TIMESTAMP AT TIME ZONE 'Asia/Dhaka')::date AT TIME ZONE 'Asia/Dhaka' AND ((direction = 'give' AND sender_phone = ${userPhone}) OR (direction = 'take' AND sender_phone = ${partnerPhone})) THEN amount ELSE 0 END), 0)::numeric AS today_given,
-                COALESCE(SUM(CASE WHEN created_at >= (CURRENT_TIMESTAMP AT TIME ZONE 'Asia/Dhaka')::date AT TIME ZONE 'Asia/Dhaka' AND ((direction = 'take' AND sender_phone = ${userPhone}) OR (direction = 'give' AND sender_phone = ${partnerPhone})) THEN amount ELSE 0 END), 0)::numeric AS today_taken
+                COALESCE(SUM(CASE WHEN created_at >= timezone(${tz}, date_trunc('day', timezone(${tz}, CURRENT_TIMESTAMP)))
+                                    AND created_at < timezone(${tz}, date_trunc('day', timezone(${tz}, CURRENT_TIMESTAMP)) + interval '1 day')
+                                    AND ((direction = 'give' AND sender_phone = ${userPhone}) OR (direction = 'take' AND sender_phone = ${partnerPhone})) 
+                                  THEN amount ELSE 0 END), 0)::numeric AS today_given,
+                COALESCE(SUM(CASE WHEN created_at >= timezone(${tz}, date_trunc('day', timezone(${tz}, CURRENT_TIMESTAMP)))
+                                    AND created_at < timezone(${tz}, date_trunc('day', timezone(${tz}, CURRENT_TIMESTAMP)) + interval '1 day')
+                                    AND ((direction = 'take' AND sender_phone = ${userPhone}) OR (direction = 'give' AND sender_phone = ${partnerPhone})) 
+                                  THEN amount ELSE 0 END), 0)::numeric AS today_taken
               FROM transactions
               WHERE ((sender_phone = ${userPhone} AND receiver_phone = ${partnerPhone})
                  OR (sender_phone = ${partnerPhone} AND receiver_phone = ${userPhone}))
@@ -94,7 +116,8 @@ export async function GET(request: Request) {
               WHERE ((sender_phone = ${userPhone} AND receiver_phone = ${partnerPhone})
                  OR (sender_phone = ${partnerPhone} AND receiver_phone = ${userPhone}))
                 AND status = ${status}
-                AND created_at >= (CURRENT_TIMESTAMP AT TIME ZONE 'Asia/Dhaka')::date AT TIME ZONE 'Asia/Dhaka'
+                AND created_at >= timezone(${tz}, date_trunc('day', timezone(${tz}, CURRENT_TIMESTAMP)))
+                AND created_at < timezone(${tz}, date_trunc('day', timezone(${tz}, CURRENT_TIMESTAMP)) + interval '1 day')
               ORDER BY created_at DESC
               LIMIT 150
             )
@@ -108,8 +131,14 @@ export async function GET(request: Request) {
               SELECT 
                 COALESCE(SUM(CASE WHEN ((direction = 'give' AND sender_phone = ${userPhone}) OR (direction = 'take' AND sender_phone = ${partnerPhone})) THEN amount ELSE 0 END), 0)::numeric AS total_given,
                 COALESCE(SUM(CASE WHEN ((direction = 'take' AND sender_phone = ${userPhone}) OR (direction = 'give' AND sender_phone = ${partnerPhone})) THEN amount ELSE 0 END), 0)::numeric AS total_taken,
-                COALESCE(SUM(CASE WHEN created_at >= (CURRENT_TIMESTAMP AT TIME ZONE 'Asia/Dhaka')::date AT TIME ZONE 'Asia/Dhaka' AND ((direction = 'give' AND sender_phone = ${userPhone}) OR (direction = 'take' AND sender_phone = ${partnerPhone})) THEN amount ELSE 0 END), 0)::numeric AS today_given,
-                COALESCE(SUM(CASE WHEN created_at >= (CURRENT_TIMESTAMP AT TIME ZONE 'Asia/Dhaka')::date AT TIME ZONE 'Asia/Dhaka' AND ((direction = 'take' AND sender_phone = ${userPhone}) OR (direction = 'give' AND sender_phone = ${partnerPhone})) THEN amount ELSE 0 END), 0)::numeric AS today_taken
+                COALESCE(SUM(CASE WHEN created_at >= timezone(${tz}, date_trunc('day', timezone(${tz}, CURRENT_TIMESTAMP)))
+                                    AND created_at < timezone(${tz}, date_trunc('day', timezone(${tz}, CURRENT_TIMESTAMP)) + interval '1 day')
+                                    AND ((direction = 'give' AND sender_phone = ${userPhone}) OR (direction = 'take' AND sender_phone = ${partnerPhone})) 
+                                  THEN amount ELSE 0 END), 0)::numeric AS today_given,
+                COALESCE(SUM(CASE WHEN created_at >= timezone(${tz}, date_trunc('day', timezone(${tz}, CURRENT_TIMESTAMP)))
+                                    AND created_at < timezone(${tz}, date_trunc('day', timezone(${tz}, CURRENT_TIMESTAMP)) + interval '1 day')
+                                    AND ((direction = 'take' AND sender_phone = ${userPhone}) OR (direction = 'give' AND sender_phone = ${partnerPhone})) 
+                                  THEN amount ELSE 0 END), 0)::numeric AS today_taken
               FROM transactions
               WHERE ((sender_phone = ${userPhone} AND receiver_phone = ${partnerPhone})
                  OR (sender_phone = ${partnerPhone} AND receiver_phone = ${userPhone}))
@@ -119,7 +148,8 @@ export async function GET(request: Request) {
               SELECT * FROM transactions
               WHERE ((sender_phone = ${userPhone} AND receiver_phone = ${partnerPhone})
                  OR (sender_phone = ${partnerPhone} AND receiver_phone = ${userPhone}))
-                AND created_at >= (CURRENT_TIMESTAMP AT TIME ZONE 'Asia/Dhaka')::date AT TIME ZONE 'Asia/Dhaka'
+                AND created_at >= timezone(${tz}, date_trunc('day', timezone(${tz}, CURRENT_TIMESTAMP)))
+                AND created_at < timezone(${tz}, date_trunc('day', timezone(${tz}, CURRENT_TIMESTAMP)) + interval '1 day')
               ORDER BY created_at DESC
               LIMIT 150
             )
@@ -136,8 +166,14 @@ export async function GET(request: Request) {
               SELECT 
                 COALESCE(SUM(CASE WHEN ((direction = 'give' AND sender_phone = ${userPhone}) OR (direction = 'take' AND sender_phone = ${partnerPhone})) THEN amount ELSE 0 END), 0)::numeric AS total_given,
                 COALESCE(SUM(CASE WHEN ((direction = 'take' AND sender_phone = ${userPhone}) OR (direction = 'give' AND sender_phone = ${partnerPhone})) THEN amount ELSE 0 END), 0)::numeric AS total_taken,
-                COALESCE(SUM(CASE WHEN created_at >= (CURRENT_TIMESTAMP AT TIME ZONE 'Asia/Dhaka')::date AT TIME ZONE 'Asia/Dhaka' AND ((direction = 'give' AND sender_phone = ${userPhone}) OR (direction = 'take' AND sender_phone = ${partnerPhone})) THEN amount ELSE 0 END), 0)::numeric AS today_given,
-                COALESCE(SUM(CASE WHEN created_at >= (CURRENT_TIMESTAMP AT TIME ZONE 'Asia/Dhaka')::date AT TIME ZONE 'Asia/Dhaka' AND ((direction = 'take' AND sender_phone = ${userPhone}) OR (direction = 'give' AND sender_phone = ${partnerPhone})) THEN amount ELSE 0 END), 0)::numeric AS today_taken
+                COALESCE(SUM(CASE WHEN created_at >= timezone(${tz}, date_trunc('day', timezone(${tz}, CURRENT_TIMESTAMP)))
+                                    AND created_at < timezone(${tz}, date_trunc('day', timezone(${tz}, CURRENT_TIMESTAMP)) + interval '1 day')
+                                    AND ((direction = 'give' AND sender_phone = ${userPhone}) OR (direction = 'take' AND sender_phone = ${partnerPhone})) 
+                                  THEN amount ELSE 0 END), 0)::numeric AS today_given,
+                COALESCE(SUM(CASE WHEN created_at >= timezone(${tz}, date_trunc('day', timezone(${tz}, CURRENT_TIMESTAMP)))
+                                    AND created_at < timezone(${tz}, date_trunc('day', timezone(${tz}, CURRENT_TIMESTAMP)) + interval '1 day')
+                                    AND ((direction = 'take' AND sender_phone = ${userPhone}) OR (direction = 'give' AND sender_phone = ${partnerPhone})) 
+                                  THEN amount ELSE 0 END), 0)::numeric AS today_taken
               FROM transactions
               WHERE ((sender_phone = ${userPhone} AND receiver_phone = ${partnerPhone})
                  OR (sender_phone = ${partnerPhone} AND receiver_phone = ${userPhone}))
@@ -162,8 +198,14 @@ export async function GET(request: Request) {
               SELECT 
                 COALESCE(SUM(CASE WHEN ((direction = 'give' AND sender_phone = ${userPhone}) OR (direction = 'take' AND sender_phone = ${partnerPhone})) THEN amount ELSE 0 END), 0)::numeric AS total_given,
                 COALESCE(SUM(CASE WHEN ((direction = 'take' AND sender_phone = ${userPhone}) OR (direction = 'give' AND sender_phone = ${partnerPhone})) THEN amount ELSE 0 END), 0)::numeric AS total_taken,
-                COALESCE(SUM(CASE WHEN created_at >= (CURRENT_TIMESTAMP AT TIME ZONE 'Asia/Dhaka')::date AT TIME ZONE 'Asia/Dhaka' AND ((direction = 'give' AND sender_phone = ${userPhone}) OR (direction = 'take' AND sender_phone = ${partnerPhone})) THEN amount ELSE 0 END), 0)::numeric AS today_given,
-                COALESCE(SUM(CASE WHEN created_at >= (CURRENT_TIMESTAMP AT TIME ZONE 'Asia/Dhaka')::date AT TIME ZONE 'Asia/Dhaka' AND ((direction = 'take' AND sender_phone = ${userPhone}) OR (direction = 'give' AND sender_phone = ${partnerPhone})) THEN amount ELSE 0 END), 0)::numeric AS today_taken
+                COALESCE(SUM(CASE WHEN created_at >= timezone(${tz}, date_trunc('day', timezone(${tz}, CURRENT_TIMESTAMP)))
+                                    AND created_at < timezone(${tz}, date_trunc('day', timezone(${tz}, CURRENT_TIMESTAMP)) + interval '1 day')
+                                    AND ((direction = 'give' AND sender_phone = ${userPhone}) OR (direction = 'take' AND sender_phone = ${partnerPhone})) 
+                                  THEN amount ELSE 0 END), 0)::numeric AS today_given,
+                COALESCE(SUM(CASE WHEN created_at >= timezone(${tz}, date_trunc('day', timezone(${tz}, CURRENT_TIMESTAMP)))
+                                    AND created_at < timezone(${tz}, date_trunc('day', timezone(${tz}, CURRENT_TIMESTAMP)) + interval '1 day')
+                                    AND ((direction = 'take' AND sender_phone = ${userPhone}) OR (direction = 'give' AND sender_phone = ${partnerPhone})) 
+                                  THEN amount ELSE 0 END), 0)::numeric AS today_taken
               FROM transactions
               WHERE ((sender_phone = ${userPhone} AND receiver_phone = ${partnerPhone})
                  OR (sender_phone = ${partnerPhone} AND receiver_phone = ${userPhone}))
@@ -187,8 +229,14 @@ export async function GET(request: Request) {
               SELECT 
                 COALESCE(SUM(CASE WHEN ((direction = 'give' AND sender_phone = ${userPhone}) OR (direction = 'take' AND sender_phone = ${partnerPhone})) THEN amount ELSE 0 END), 0)::numeric AS total_given,
                 COALESCE(SUM(CASE WHEN ((direction = 'take' AND sender_phone = ${userPhone}) OR (direction = 'give' AND sender_phone = ${partnerPhone})) THEN amount ELSE 0 END), 0)::numeric AS total_taken,
-                COALESCE(SUM(CASE WHEN created_at >= (CURRENT_TIMESTAMP AT TIME ZONE 'Asia/Dhaka')::date AT TIME ZONE 'Asia/Dhaka' AND ((direction = 'give' AND sender_phone = ${userPhone}) OR (direction = 'take' AND sender_phone = ${partnerPhone})) THEN amount ELSE 0 END), 0)::numeric AS today_given,
-                COALESCE(SUM(CASE WHEN created_at >= (CURRENT_TIMESTAMP AT TIME ZONE 'Asia/Dhaka')::date AT TIME ZONE 'Asia/Dhaka' AND ((direction = 'take' AND sender_phone = ${userPhone}) OR (direction = 'give' AND sender_phone = ${partnerPhone})) THEN amount ELSE 0 END), 0)::numeric AS today_taken
+                COALESCE(SUM(CASE WHEN created_at >= timezone(${tz}, date_trunc('day', timezone(${tz}, CURRENT_TIMESTAMP)))
+                                    AND created_at < timezone(${tz}, date_trunc('day', timezone(${tz}, CURRENT_TIMESTAMP)) + interval '1 day')
+                                    AND ((direction = 'give' AND sender_phone = ${userPhone}) OR (direction = 'take' AND sender_phone = ${partnerPhone})) 
+                                  THEN amount ELSE 0 END), 0)::numeric AS today_given,
+                COALESCE(SUM(CASE WHEN created_at >= timezone(${tz}, date_trunc('day', timezone(${tz}, CURRENT_TIMESTAMP)))
+                                    AND created_at < timezone(${tz}, date_trunc('day', timezone(${tz}, CURRENT_TIMESTAMP)) + interval '1 day')
+                                    AND ((direction = 'take' AND sender_phone = ${userPhone}) OR (direction = 'give' AND sender_phone = ${partnerPhone})) 
+                                  THEN amount ELSE 0 END), 0)::numeric AS today_taken
               FROM transactions
               WHERE ((sender_phone = ${userPhone} AND receiver_phone = ${partnerPhone})
                  OR (sender_phone = ${partnerPhone} AND receiver_phone = ${userPhone}))
@@ -212,8 +260,14 @@ export async function GET(request: Request) {
               SELECT 
                 COALESCE(SUM(CASE WHEN ((direction = 'give' AND sender_phone = ${userPhone}) OR (direction = 'take' AND sender_phone = ${partnerPhone})) THEN amount ELSE 0 END), 0)::numeric AS total_given,
                 COALESCE(SUM(CASE WHEN ((direction = 'take' AND sender_phone = ${userPhone}) OR (direction = 'give' AND sender_phone = ${partnerPhone})) THEN amount ELSE 0 END), 0)::numeric AS total_taken,
-                COALESCE(SUM(CASE WHEN created_at >= (CURRENT_TIMESTAMP AT TIME ZONE 'Asia/Dhaka')::date AT TIME ZONE 'Asia/Dhaka' AND ((direction = 'give' AND sender_phone = ${userPhone}) OR (direction = 'take' AND sender_phone = ${partnerPhone})) THEN amount ELSE 0 END), 0)::numeric AS today_given,
-                COALESCE(SUM(CASE WHEN created_at >= (CURRENT_TIMESTAMP AT TIME ZONE 'Asia/Dhaka')::date AT TIME ZONE 'Asia/Dhaka' AND ((direction = 'take' AND sender_phone = ${userPhone}) OR (direction = 'give' AND sender_phone = ${partnerPhone})) THEN amount ELSE 0 END), 0)::numeric AS today_taken
+                COALESCE(SUM(CASE WHEN created_at >= timezone(${tz}, date_trunc('day', timezone(${tz}, CURRENT_TIMESTAMP)))
+                                    AND created_at < timezone(${tz}, date_trunc('day', timezone(${tz}, CURRENT_TIMESTAMP)) + interval '1 day')
+                                    AND ((direction = 'give' AND sender_phone = ${userPhone}) OR (direction = 'take' AND sender_phone = ${partnerPhone})) 
+                                  THEN amount ELSE 0 END), 0)::numeric AS today_given,
+                COALESCE(SUM(CASE WHEN created_at >= timezone(${tz}, date_trunc('day', timezone(${tz}, CURRENT_TIMESTAMP)))
+                                    AND created_at < timezone(${tz}, date_trunc('day', timezone(${tz}, CURRENT_TIMESTAMP)) + interval '1 day')
+                                    AND ((direction = 'take' AND sender_phone = ${userPhone}) OR (direction = 'give' AND sender_phone = ${partnerPhone})) 
+                                  THEN amount ELSE 0 END), 0)::numeric AS today_taken
               FROM transactions
               WHERE ((sender_phone = ${userPhone} AND receiver_phone = ${partnerPhone})
                  OR (sender_phone = ${partnerPhone} AND receiver_phone = ${userPhone}))
@@ -257,11 +311,11 @@ export async function GET(request: Request) {
       totalGiven,
       totalTaken,
       netBalance,
-      statusText: netBalance > 0 
+      statusText: netBalance > 0
         ? `Partner owes you ৳ ${netBalance.toLocaleString()}`
         : netBalance < 0
-        ? `You owe partner ৳ ${Math.abs(netBalance).toLocaleString()}`
-        : `All settled up (৳ 0)`
+          ? `You owe partner ৳ ${Math.abs(netBalance).toLocaleString()}`
+          : `All settled up (৳ 0)`
     };
 
     return NextResponse.json({ transactions: rawTx, summary });

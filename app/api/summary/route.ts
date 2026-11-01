@@ -37,8 +37,11 @@ export async function GET(request: Request) {
       `;
     }
 
-    // Use Asia/Dhaka date for accurate day boundary
-    const todayStr = new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Dhaka' }).format(new Date());
+    const timezoneParam = searchParams.get('timezone') || 'Asia/Dhaka';
+    const tz = /^[A-Za-z0-9_+\-\/]+$/.test(timezoneParam) ? timezoneParam : 'Asia/Dhaka';
+
+    // Use Asia/Dhaka or user's local timezone for accurate day boundary
+    const todayStr = new Intl.DateTimeFormat('en-CA', { timeZone: tz }).format(new Date());
 
     let todayGiven = 0;
     let todayTaken = 0;
@@ -53,7 +56,7 @@ export async function GET(request: Request) {
 
       const amt = Number(tx.amount) || 0;
       const txDateStr = tx.created_at 
-        ? new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Dhaka' }).format(new Date(tx.created_at))
+        ? new Intl.DateTimeFormat('en-CA', { timeZone: tz }).format(new Date(tx.created_at))
         : '';
       const isToday = txDateStr === todayStr;
 

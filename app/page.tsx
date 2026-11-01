@@ -197,12 +197,18 @@ export default function Home() {
     if (!userPhone) return;
     setIsLoading(true);
     try {
+      let userTz = 'Asia/Dhaka';
+      try {
+        userTz = Intl.DateTimeFormat().resolvedOptions().timeZone || 'Asia/Dhaka';
+      } catch (_) {}
+
       const txParams = new URLSearchParams({
         userPhone,
         ...(partnerPhone ? { partnerPhone } : {}),
         dateRange,
         mfs: selectedMfs,
         status: selectedStatus,
+        timezone: userTz,
       });
 
       // Single combined fast query returns both transactions and summary
