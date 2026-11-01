@@ -432,6 +432,11 @@ export default function Home() {
       return;
     }
 
+    if (formData.direction === 'take' && !formData.customer_phone.trim()) {
+      showToast('Customer Number is required when requesting or taking money.', 'error');
+      return;
+    }
+
     if (!userPhone || !partnerPhone) {
       showToast('Shop phone is missing. Please select your shop first.', 'error');
       return;
@@ -1982,9 +1987,17 @@ export default function Home() {
               {/* Customer Phone & Amount */}
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
                 <div>
-                  <label className="text-[11px] font-medium text-slate-600 dark:text-slate-400 block mb-1">Customer Number (Optional)</label>
+                  <label className="text-[11px] font-medium text-slate-600 dark:text-slate-400 block mb-1">
+                    Customer Number{' '}
+                    {formData.direction === 'take' ? (
+                      <span className="text-rose-500 dark:text-rose-400 font-bold">*</span>
+                    ) : (
+                      <span className="text-slate-400 dark:text-slate-500 font-normal">(Optional)</span>
+                    )}
+                  </label>
                   <input
                     type="text"
+                    required={formData.direction === 'take'}
                     placeholder="017XXXXXXXX"
                     value={formData.customer_phone}
                     onChange={(e) => setFormData({ ...formData, customer_phone: e.target.value })}

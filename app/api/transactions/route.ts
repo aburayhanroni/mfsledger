@@ -311,7 +311,7 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'Amount must be a valid number between ৳ 1 and ৳ 1,000,000' }, { status: 400 });
     }
 
-    // Customer phone sanitization (Optional)
+    // Customer phone sanitization & validation (Required only when direction === 'take')
     let cleanCustomerPhone: string | null = null;
     if (customer_phone && String(customer_phone).trim()) {
       const sanitized = String(customer_phone).trim().replace(/[^\d+]/g, '');
@@ -320,6 +320,10 @@ export async function POST(request: Request) {
       } else if (sanitized.length > 0) {
         return NextResponse.json({ error: 'Invalid customer phone number' }, { status: 400 });
       }
+    }
+
+    if (direction === 'take' && !cleanCustomerPhone) {
+      return NextResponse.json({ error: 'Customer phone number is required when requesting or taking money' }, { status: 400 });
     }
 
     // TrxID sanitization
