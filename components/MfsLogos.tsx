@@ -92,7 +92,7 @@ export function MfsBadge({
 
   return (
     <span className={`inline-flex items-center gap-1.5 px-2 py-1 rounded-sm border ${info.bg} ${info.border} ${className}`}>
-      <span className="w-5 h-4 flex items-center justify-center p-0.5 bg-white rounded-xs shrink-0 shadow-xs">
+      <span className="w-5 h-4 flex items-center justify-center p-0.5 bg-[#C5A880]/15 dark:bg-[#C5A880]/15 rounded-sm shrink-0 shadow-xs border border-[#C5A880]/30 dark:border-[#C5A880]/25">
         <MfsLogo type={norm} className="h-full w-full object-contain" />
       </span>
       {showName && <span className={`text-[11px] font-bold tracking-wider uppercase ${info.text}`}>{info.name}</span>}

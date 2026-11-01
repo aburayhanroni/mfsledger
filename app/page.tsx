@@ -768,7 +768,7 @@ export default function Home() {
             {(['bkash', 'nagad', 'rocket', 'upay'] as MfsProvider[]).map((p) => (
               <div
                 key={p}
-                className="w-10 h-7 flex items-center justify-center p-1 bg-white border border-slate-200 dark:border-slate-700/60 rounded-xs shadow-xs"
+                className="w-10 h-7 flex items-center justify-center p-1 bg-[#C5A880]/15 dark:bg-[#C5A880]/15 border border-[#C5A880]/30 dark:border-[#C5A880]/25 rounded-sm shadow-xs"
               >
                 <MfsLogo type={p} className="w-full h-full object-contain" />
               </div>
@@ -1138,7 +1138,7 @@ export default function Home() {
                           {/* Time & Official MFS Logo */}
                           <td className="px-3 py-2.5 whitespace-nowrap">
                             <div className="flex items-center gap-2.5">
-                              <div className="w-10 h-7 flex items-center justify-center p-0.5 bg-white border border-slate-200 dark:border-slate-700/60 rounded-xs shadow-xs shrink-0">
+                              <div className="w-10 h-7 flex items-center justify-center p-0.5 bg-[#C5A880]/15 dark:bg-[#C5A880]/15 border border-[#C5A880]/30 dark:border-[#C5A880]/25 rounded-sm shadow-xs shrink-0">
                                 <MfsLogo type={tx.mfs_type} className="w-full h-full object-contain" />
                               </div>
                               <div>
@@ -1365,7 +1365,7 @@ export default function Home() {
                       <div className="px-3 py-2.5 flex items-center justify-between gap-2">
                         {/* Left: Official MFS Logo + Customer Phone + Time */}
                         <div className="flex items-center gap-2 min-w-0">
-                          <div className="w-8 h-6 flex items-center justify-center p-0.5 bg-white border border-slate-200 dark:border-slate-700/60 rounded-xs shadow-xs shrink-0">
+                          <div className="w-8 h-6 flex items-center justify-center p-0.5 bg-[#C5A880]/15 dark:bg-[#C5A880]/15 border border-[#C5A880]/30 dark:border-[#C5A880]/25 rounded-sm shadow-xs shrink-0">
                             <MfsLogo type={tx.mfs_type} className="w-full h-full object-contain" />
                           </div>
                           <div className="min-w-0">
@@ -1680,7 +1680,7 @@ export default function Home() {
                 <div className="flex items-center justify-between">
                   <span className="text-[11px] font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wider">MFS Provider & Amount</span>
                   <div className="flex items-center gap-1.5 bg-white dark:bg-[#191A22] border border-slate-200 dark:border-slate-800 px-2 py-1 rounded-sm">
-                    <div className="w-5 h-4 flex items-center justify-center p-0.5 bg-white rounded-xs shrink-0 shadow-xs border border-slate-200 dark:border-transparent">
+                    <div className="w-6 h-5 flex items-center justify-center p-0.5 bg-[#C5A880]/15 dark:bg-[#C5A880]/15 rounded-sm shrink-0 shadow-xs border border-[#C5A880]/30 dark:border-[#C5A880]/25">
                       <MfsLogo type={fulfillTx.mfs_type} className="w-full h-full object-contain" />
                     </div>
                     <span className="font-bold text-[11px] text-slate-800 dark:text-slate-200 uppercase">
@@ -1978,7 +1978,7 @@ export default function Home() {
                             : 'border-slate-200 dark:border-slate-800 hover:border-slate-300 dark:hover:border-slate-700 bg-slate-50 dark:bg-slate-900/60 text-slate-600 dark:text-slate-400'
                         }`}
                       >
-                        <div className="w-12 h-8 flex items-center justify-center p-1 bg-white rounded-xs border border-slate-200 dark:border-slate-700/60 shadow-xs">
+                        <div className="w-12 h-8 flex items-center justify-center p-1 bg-[#C5A880]/15 dark:bg-[#C5A880]/15 rounded-sm border border-[#C5A880]/30 dark:border-[#C5A880]/25 shadow-xs">
                           <MfsLogo type={mfs} className="w-full h-full object-contain" />
                         </div>
                         <span className={`text-[11px] font-bold uppercase tracking-wider ${isSelected ? 'text-[#8C6B3F] dark:text-[#C5A880]' : 'text-slate-600 dark:text-slate-400'}`}>
